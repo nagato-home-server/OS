@@ -1,0 +1,392 @@
+/*
+ * Copyright 2024, UNSW (ABN 57 195 873 179)
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
+ */
+#include <string.h>
+#include <libvmm/guest.h>
+#include <libvmm/virq.h>
+#include <libvmm/util/util.h>
+#include <libvmm/virtio/config.h>
+#include <libvmm/virtio/virtq.h>
+#include <libvmm/virtio/virtio.h>
+#include <libvmm/virtio/net.h>
+#include <libvmm/virtio/virtio.h>
+#include <sddf/network/queue.h>
+#include <sddf/network/constants.h>
+
+/* Uncomment this to enable debug logging */
+// #define DEBUG_NET
+
+#if defined(DEBUG_NET)
+#define LOG_NET(...) do{ printf("VIRTIO(NET): "); printf(__VA_ARGS__); }while(0)
+#else
+#define LOG_NET(...) do{}while(0)
+#endif
+
+#define LOG_NET_ERR(...) do{ printf("VIRTIO(NET)|ERROR: "); printf(__VA_ARGS__); }while(0)
+
+static inline struct virtio_net_device *device_state(struct virtio_device *dev)
+{
+    return (struct virtio_net_device *)dev->device_data;
+}
+
+static void virtio_net_reset(struct virtio_device *dev)
+{
+    LOG_NET("operation: reset\n");
+    for (int i = 0; i < dev->num_vqs; i++) {
+        dev->vqs[i].ready = false;
+        dev->vqs[i].last_idx = 0;
+    }
+}
+
+static bool driver_ok(struct virtio_device *dev)
+{
+    return (dev->regs.Status & VIRTIO_CONFIG_S_DRIVER_OK) && (dev->regs.Status & VIRTIO_CONFIG_S_FEATURES_OK);
+}
+
+static bool virtio_net_get_device_features(struct virtio_device *dev, uint32_t *features)
+{
+    LOG_NET("operation: get device features\n");
+
+    if (dev->regs.Status & VIRTIO_CONFIG_S_FEATURES_OK) {
+        LOG_NET_ERR("Driver tried to read device features after FEATURES_OK\n");
+    }
+
+    switch (dev->regs.DeviceFeaturesSel) {
+    /* Feature bits 0 to 31 */
+    case 0:
+        *features = BIT_LOW(VIRTIO_NET_F_MAC);
+        break;
+    /* Features bits 32 to 63 */
+    case 1:
+        *features = BIT_HIGH(VIRTIO_F_VERSION_1);
+        break;
+    default:
+        LOG_NET_ERR("Bad DeviceFeaturesSel 0x%x\n", dev->regs.DeviceFeaturesSel);
+        return false;
+    }
+    return true;
+}
+
+static bool virtio_net_set_driver_features(struct virtio_device *dev, uint32_t features)
+{
+    bool success = true;
+
+    switch (dev->regs.DriverFeaturesSel) {
+    /* Feature bits 0 to 31 */
+    case 0:
+        /** F_MAC is required */
+        success = (features == BIT_LOW(VIRTIO_NET_F_MAC));
+        break;
+
+    /* Features bits 32 to 63 */
+    case 1:
+        success = (features == BIT_HIGH(VIRTIO_F_VERSION_1));
+        break;
+
+    default:
+        LOG_NET_ERR("Bad DriverFeaturesSel 0x%x\n", dev->regs.DriverFeaturesSel);
+        success = false;
+    }
+    if (success) {
+        dev->features_happy = 1;
+    }
+    return success;
+}
+
+static bool virtio_net_get_device_config(struct virtio_device *dev, uint32_t offset, uint32_t *ret_val)
+{
+    struct virtio_net_config *config = &device_state(dev)->config;
+
+    uint32_t word_offset = offset / sizeof(uint32_t);
+    switch (word_offset) {
+    case 0:
+        *ret_val = (uint32_t)config->mac[0];
+        *ret_val |= (uint32_t)config->mac[1] << 8;
+        *ret_val |= (uint32_t)config->mac[2] << 16;
+        *ret_val |= (uint32_t)config->mac[3] << 24;
+        break;
+
+    case 1:
+        *ret_val = (uint32_t)config->mac[4];
+        *ret_val |= (uint32_t)config->mac[5] << 8;
+        break;
+
+    default:
+        LOG_NET_ERR("Unknown device config register: 0x%x\n", offset);
+        return false;
+    }
+
+    return true;
+}
+
+static bool virtio_net_set_device_config(struct virtio_device *dev, uint32_t offset, uint32_t val)
+{
+    LOG_NET_ERR("All configuration fields are read-only\n");
+    return false;
+}
+
+static bool virtio_net_respond(struct virtio_device *dev)
+{
+    dev->regs.InterruptStatus = BIT_LOW(0);
+    bool success = virq_inject(dev->virq);
+    assert(success);
+
+    return success;
+}
+
+void sanitise_packet_for_hw_csum(char *buf, size_t len)
+{
+    /* Make sure it's an IPv4 frame */
+    uint16_t eth_type = (buf[12] << 8) | buf[13];
+    if (eth_type != 0x0800) {
+        return; // Only handling IPv4 for now
+    }
+
+    /* Locate IP header */
+    char *ip_hdr = &buf[14];
+    char ip_proto = ip_hdr[9];
+    char ip_hdr_len = (ip_hdr[0] & 0x0F) * 4;
+    char *l4_hdr = ip_hdr + ip_hdr_len;
+
+    /* Zero out IP csum */
+    ip_hdr[10] = 0;
+    ip_hdr[11] = 0;
+
+    /* Zero out L4 csum */
+    if (ip_proto == 1) {
+        /* ICMP */
+        l4_hdr[2] = 0;
+        l4_hdr[3] = 0;
+    } else if (ip_proto == 6) {
+        /* TCP */
+        l4_hdr[16] = 0;
+        l4_hdr[17] = 0;
+    } else if (ip_proto == 17) {
+        /* UDP */
+        l4_hdr[6] = 0;
+        l4_hdr[7] = 0;
+    } else {
+        LOG_NET_ERR("unknown IP protocol for checksum clearning: 0x%x\n", ip_proto);
+    }
+}
+
+static void handle_tx_msg(struct virtio_device *dev, uint16_t desc_head, bool *notify_tx_server, bool *respond_to_guest)
+{
+    struct virtio_net_device *state = device_state(dev);
+    virtio_queue_handler_t *vq = &dev->vqs[VIRTIO_NET_TX_VIRTQ];
+
+    if (net_queue_full_active(&state->tx)) {
+        goto fail;
+    }
+
+    net_buff_desc_t sddf_buffer;
+    int error = net_dequeue_free(&state->tx, &sddf_buffer);
+    if (error) {
+        goto fail;
+    }
+
+    char *dest_buf = state->tx_data + sddf_buffer.io_or_offset;
+
+    uint64_t payload_len = virtio_desc_chain_payload_len(vq, desc_head);
+    uint64_t packet_len = payload_len - sizeof(struct virtio_net_hdr_mrg_rxbuf);
+
+    /*
+     * read_off = sizeof(struct virtio_net_hdr_mrg_rxbuf)
+     * to strip virtio header before copying to sDDF
+     */
+    assert(virtio_read_data_from_desc_chain(vq, desc_head, packet_len, sizeof(struct virtio_net_hdr_mrg_rxbuf), dest_buf));
+    sddf_buffer.len = packet_len;
+
+#ifdef NETWORK_HW_HAS_CHECKSUM
+    /*
+     * The virtIO spec does not have a defined way to tell the guest to send packets without
+     * any checksums. When using native hardware that has TX checksum offloading, this means
+     * each virtIO net packet must be inspected and have the checksum cleared to avoid double
+     * checksumming. We inspect the packet and clear the IP and level 4 checksums.
+     */
+    sanitise_packet_for_hw_csum(dest_buf, sddf_buffer.len);
+#endif
+
+    error = net_enqueue_active(&state->tx, sddf_buffer);
+    /* This cannot fail as we've checked above */
+    assert(!error);
+
+    virtio_virtq_add_used(vq, desc_head, 0);
+    *respond_to_guest = true;
+    *notify_tx_server = true;
+    return;
+
+fail:
+    virtio_virtq_add_used(vq, desc_head, 0);
+    *respond_to_guest = true;
+}
+
+static bool virtio_net_queue_notify(struct virtio_device *dev)
+{
+    struct virtio_net_device *state = device_state(dev);
+
+    if (!driver_ok(dev)) {
+        LOG_NET_ERR("Driver not ready\n");
+        return false;
+    }
+    if (dev->regs.QueueSel != VIRTIO_NET_TX_VIRTQ) {
+        LOG_NET_ERR("Invalid queue\n");
+        return false;
+    }
+    if (!dev->vqs[VIRTIO_NET_TX_VIRTQ].ready) {
+        LOG_NET_ERR("TX virtq not ready\n");
+        return false;
+    }
+
+    virtio_queue_handler_t *vq = &dev->vqs[VIRTIO_NET_TX_VIRTQ];
+
+    bool notify_tx_server = false;
+    bool respond_to_guest = false;
+
+    uint16_t desc_head;
+    while (virtio_virtq_pop_avail(vq, &desc_head)) {
+        handle_tx_msg(dev, desc_head, &notify_tx_server, &respond_to_guest);
+    }
+
+    if (notify_tx_server && net_require_signal_active(&state->tx)) {
+        net_cancel_signal_active(&state->tx);
+        microkit_notify(state->tx_ch);
+    }
+
+    bool success = true;
+    if (respond_to_guest) {
+        success = virtio_net_respond(dev);
+    }
+
+    return success;
+}
+
+static void handle_rx_buffer(struct virtio_device *dev, uint64_t buf_offset, uint32_t size, bool *respond_to_guest)
+{
+    struct virtio_net_device *state = device_state(dev);
+    virtio_queue_handler_t *vq = &dev->vqs[VIRTIO_NET_RX_VIRTQ];
+
+    if (!vq->ready) {
+        return;
+    }
+
+    uint16_t desc_head;
+    if (!virtio_virtq_pop_avail(vq, &desc_head)) {
+        /* No available buffer */
+        return;
+    }
+
+    struct virtio_net_hdr_mrg_rxbuf virtio_hdr = { 0 };
+    virtio_hdr.num_buffers = 1;
+
+    assert(virtio_write_data_to_desc_chain(vq, desc_head, sizeof(struct virtio_net_hdr_mrg_rxbuf), 0,
+                                           (char *)&virtio_hdr));
+    assert(virtio_write_data_to_desc_chain(vq, desc_head, size, sizeof(struct virtio_net_hdr_mrg_rxbuf),
+                                           (char *)(state->rx_data + buf_offset)));
+
+    /* Put it in the used ring */
+    virtio_virtq_add_used(vq, desc_head, sizeof(struct virtio_net_hdr_mrg_rxbuf) + size);
+
+    *respond_to_guest = true;
+}
+
+void virtio_net_handle_rx(struct virtio_net_device *state)
+{
+    struct virtio_device *dev = &state->virtio_device;
+    net_buff_desc_t sddf_buffer;
+    bool reprocess = true;
+    bool respond_to_guest = false;
+
+    while (reprocess) {
+        while (net_dequeue_active(&state->rx, &sddf_buffer) != -1) {
+            /* this is likely most of the time, we don't want to pay the branch misprediction cost */
+            if (likely(driver_ok(dev) && dev->vqs[VIRTIO_NET_RX_VIRTQ].ready)) {
+                /* On failure, drop packet since we don't know how long until next interrupt */
+                handle_rx_buffer(dev, sddf_buffer.io_or_offset, sddf_buffer.len, &respond_to_guest);
+            }
+
+            sddf_buffer.len = 0;
+            net_enqueue_free(&state->rx, sddf_buffer);
+        }
+
+        net_request_signal_active(&state->rx);
+        reprocess = false;
+
+        if (!net_queue_empty_active(&state->rx)) {
+            net_cancel_signal_active(&state->rx);
+            reprocess = true;
+        }
+    }
+
+    if (respond_to_guest) {
+        virtio_net_respond(dev);
+    }
+}
+
+static virtio_device_funs_t functions = {
+    .device_reset = virtio_net_reset,
+    .get_device_features = virtio_net_get_device_features,
+    .set_driver_features = virtio_net_set_driver_features,
+    .get_device_config = virtio_net_get_device_config,
+    .set_device_config = virtio_net_set_device_config,
+    .queue_notify = virtio_net_queue_notify,
+};
+
+static struct virtio_device *virtio_net_init(struct virtio_net_device *net_dev, virtio_transport_type_t type,
+                                             size_t virq, net_queue_handle_t *rx, net_queue_handle_t *tx,
+                                             uintptr_t rx_data, uintptr_t tx_data, microkit_channel rx_ch,
+                                             microkit_channel tx_ch, uint8_t mac[VIRTIO_NET_CONFIG_MAC_SZ])
+{
+    struct virtio_device *dev = &net_dev->virtio_device;
+
+    dev->regs.DeviceID = VIRTIO_DEVICE_ID_NET;
+    dev->regs.VendorID = VIRTIO_DEV_VENDOR_ID;
+    dev->transport_type = type;
+    dev->funs = &functions;
+    dev->vqs = net_dev->vqs;
+    dev->num_vqs = VIRTIO_NET_NUM_VIRTQ;
+    dev->virq = virq;
+    dev->device_data = net_dev;
+
+    memcpy(net_dev->config.mac, mac, VIRTIO_NET_CONFIG_MAC_SZ);
+
+    net_dev->rx = *rx;
+    net_dev->tx = *tx;
+    net_dev->rx_data = (void *)rx_data;
+    net_dev->tx_data = (void *)tx_data;
+    net_dev->rx_ch = rx_ch;
+    net_dev->tx_ch = tx_ch;
+
+    return dev;
+}
+
+bool virtio_mmio_net_init(struct virtio_net_device *net_dev, uintptr_t region_base, uintptr_t region_size, size_t virq,
+                          net_queue_handle_t *rx, net_queue_handle_t *tx, uintptr_t rx_data, uintptr_t tx_data,
+                          microkit_channel rx_ch, microkit_channel tx_ch, uint8_t mac[VIRTIO_NET_CONFIG_MAC_SZ])
+{
+    struct virtio_device *dev = virtio_net_init(net_dev, VIRTIO_TRANSPORT_MMIO, virq, rx, tx, rx_data, tx_data, rx_ch,
+                                                tx_ch, mac);
+
+    return virtio_mmio_register_device(dev, region_base, region_size, virq);
+}
+
+bool virtio_pci_net_init(struct virtio_net_device *net_dev, uint32_t dev_slot, size_t virq, net_queue_handle_t *rx,
+                         net_queue_handle_t *tx, uintptr_t rx_data, uintptr_t tx_data, microkit_channel rx_ch,
+                         microkit_channel tx_ch, uint8_t mac[VIRTIO_NET_CONFIG_MAC_SZ])
+{
+    struct virtio_device *dev = virtio_net_init(net_dev, VIRTIO_TRANSPORT_PCI, virq, rx, tx, rx_data, tx_data, rx_ch,
+                                                tx_ch, mac);
+
+    dev->transport.pci.device_id = VIRTIO_PCI_NET_DEV_ID;
+    dev->transport.pci.vendor_id = VIRTIO_PCI_VENDOR_ID;
+    dev->transport.pci.device_class = PCI_CLASS_NETWORK_ETHERNET;
+
+    bool success = virtio_pci_alloc_dev_cfg_space(dev, dev_slot);
+    assert(success);
+
+    virtio_pci_alloc_memory_bar(dev, 0, VIRTIO_PCI_DEFAULT_BAR_SIZE);
+
+    return virtio_pci_register_device(dev, virq);
+}

@@ -1,0 +1,190 @@
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+name: CI
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+  push:
+    branches: [ "main" ]
+  schedule:
+    # 19.37 AEST on a Friday weekly
+    # i.e. 07.37 UTC on Friday weekly.
+    # This is a random time as GitHub suggests non-hour-aligned times as their
+    # runners are busier at that time, and it has been scheduled to avoid
+    # conflicts with humans trying to use the boards.
+    - cron: '37 7 * * 5'
+
+env:
+  MICROKIT_VERSION: 2.2.0-dev.63+31ee14b
+  MICROKIT_URL: https://trustworthy.systems/Downloads/microkit/
+  SDFGEN_VERSION: 0.33.0
+
+jobs:
+  build_manual:
+    name: Build manual
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+      - name: Create nix-shell and build PDF
+        run: |
+          cd docs
+          nix develop .#docs --ignore-environment -c bash -c 'pandoc MANUAL.md -o MANUAL.pdf'
+      - name: Upload manual PDF
+        uses: actions/upload-artifact@v7
+        with:
+          name: MANUAL
+          path: docs/MANUAL.pdf
+
+  build_macos_arm64:
+    name: Build examples (macOS ARM64)
+    runs-on: macos-14
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: 'true'
+      - name: Download Microkit SDK
+        run: |
+          wget ${{ env.MICROKIT_URL }}/microkit-sdk-${{ env.MICROKIT_VERSION }}-macos-aarch64.tar.gz
+          tar xf microkit-sdk-${{ env.MICROKIT_VERSION }}-macos-aarch64.tar.gz
+      - name: Install dependencies (via Homebrew)
+        # 'expect' is only a dependency for CI testing
+        run: |
+          brew install llvm lld qemu dtc make dosfstools expect acpica
+          echo "/opt/homebrew/opt/llvm/bin:$PATH" >> $GITHUB_PATH
+      - name: Setup pyenv
+        run: |
+          python3.13 -m venv venv
+          ./venv/bin/pip install --upgrade sdfgen==${{ env.SDFGEN_VERSION }}
+      - name: Setup systems-ci
+        uses: au-ts/systems-ci@main
+      - name: Build examples
+        run: python3.13 ./ci/build.py ${PWD}/microkit-sdk-${{ env.MICROKIT_VERSION }} $(nproc)
+        shell: bash
+        env:
+          PYTHON: ${{ github.workspace }}/venv/bin/python
+
+  build_linux_x86_64_nix:
+    name: Build examples (Linux x86-64 via Nix)
+    runs-on: [self-hosted, Linux, X64]
+    outputs:
+      artifact_id: ${{ steps.upload_images.outputs.artifact-id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: 'true'
+      - name: Setup systems-ci
+        uses: au-ts/systems-ci@main
+        with:
+          path: systems-ci
+      - name: Install Nix
+        uses: cachix/install-nix-action@v25
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+      - name: Get Nix dependencies
+        run: nix develop -c bash -c 'echo Hello World'
+      - name: Build examples
+        run: nix develop --ignore-environment -c bash -c 'source systems-ci/setup.sh && CI=1 ./ci/build.py $MICROKIT_SDK $(nproc)'
+      - name: Archive image artifacts
+        id: upload_images
+        uses: actions/upload-artifact@v4
+        with:
+          name: loader-images
+          path: |
+            ci_build/**/loader.img
+            ci_build/**/sel4_32.elf
+          if-no-files-found: error
+
+  run_qemu:
+    name: Run (QEMU)
+    runs-on: [self-hosted, Linux, X64]
+    needs: build_linux_x86_64_nix
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Setup systems-ci
+        uses: au-ts/systems-ci@main
+
+      # GitHub seems to limit download speed of artifacts from their runners to self hosted runners.
+      # So applying a workaround from https://github.com/actions/download-artifact/issues/362#issuecomment-3060841829
+      - name: Download images using azcopy
+        run: |
+          artifact_url="https://api.github.com/repos/${{ github.repository }}/actions/artifacts/${{ needs.build_linux_x86_64_nix.outputs.artifact_id }}/zip"
+          signed_url="$(curl -L -I -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -o /dev/null -w "%{url_effective}" "$artifact_url")"
+          azcopy copy "$signed_url" "loader-images.zip"
+          unzip -q loader-images.zip -d ci_build
+          rm loader-images.zip
+      - name: Run tests
+        run: |
+          export PATH="$(pwd)/machine_queue":$PATH
+          exec ./ci/run.py --only-qemu
+      - name: Archive logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-qemu
+          path: ci_logs
+          if-no-files-found: error
+
+  run_hardware:
+    name: Run (hardware)
+    runs-on: ubuntu-latest
+    if: ${{ github.repository_owner == 'au-ts' &&
+              (
+                (github.event_name == 'schedule') ||
+                (github.event_name == 'pull_request' &&
+                  (
+                    (github.event.action != 'labeled' && contains(github.event.pull_request.labels.*.name, 'hardware-test')) ||
+                    (github.event.action == 'labeled' && github.event.label.name == 'hardware-test')
+                  )
+                )
+              )
+         }}
+    needs: build_linux_x86_64_nix
+    concurrency:
+      group: ${{ github.workflow }}-sddf-hardware-tests-${{ github.event.number }}-${{ strategy.job-index }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout sDDF repository
+        uses: actions/checkout@v6
+      - name: Get machine queue
+        uses: actions/checkout@v6
+        with:
+          repository: seL4/machine_queue
+          path: machine_queue
+      - name: Download images
+        uses: actions/download-artifact@v8
+        with:
+          name: loader-images
+          path: ci_build
+      - name: Setup systems-ci
+        uses: au-ts/systems-ci@main
+      - name: Setup machine queue SSH key
+        run: .github/setup_ssh_key.sh
+        env:
+          MACHINE_QUEUE_KEY: ${{ secrets.MACHINE_QUEUE_KEY }}
+      - name: Run tests
+        run: |
+          export PATH="$(pwd)/machine_queue":$PATH
+          # GitHub Actions is broken
+          # https://github.com/ringerc/github-actions-signal-handling-demo#why-child-process-tasks-dont-get-a-chance-to-clean-up-on-job-cancel
+          exec ./ci/run.py --no-only-qemu
+      - name: Archive logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-logs-hardware
+          path: ci_logs
+          if-no-files-found: error

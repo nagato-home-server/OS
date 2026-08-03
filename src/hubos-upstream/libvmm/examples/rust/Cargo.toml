@@ -1,0 +1,18 @@
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+[package]
+name = "vmm"
+version = "0.1.0"
+edition = "2021"
+authors = ["Ivan Velickovic <i.velickovic@unsw.edu.au>"]
+license = "BSD-2-Clause"
+
+[[bin]]
+name = "vmm"
+path = "src/vmm.rs"
+
+[dependencies]
+sel4-microkit = { git = "https://github.com/seL4/rust-sel4", rev = "c30d0e44fb32c15239049ce402ef2a8c72499aa3" }
+sel4-microkit-base = { git = "https://github.com/seL4/rust-sel4", rev = "c30d0e44fb32c15239049ce402ef2a8c72499aa3", features = ["extern-symbols"] }

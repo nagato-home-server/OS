@@ -1,0 +1,29 @@
+# Copyright 2020, Data61, CSIRO (ABN 41 687 119 230)
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+# Actions to run on pull requests
+
+name: PR
+
+on: [pull_request, workflow_dispatch]
+
+jobs:
+  pr-checks:
+    name: Checks
+    uses: seL4/ci-actions/.github/workflows/pr.yml@master
+
+  clippy_check:
+    runs-on: [self-hosted, macos, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Clippy
+        # Make sure CI fails on all warnings, including Clippy lints
+        run: nix develop --ignore-environment -c bash -c "cd tool/microkit && cargo-clippy --all-targets --all-features -- -D warnings -Wclippy::get_unwrap"
+
+  rustfmt_check:
+    runs-on: [self-hosted, macos, ARM64]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run rustfmt
+        run: nix develop --ignore-environment -c bash -c "cd tool/microkit && cargo-fmt --check"

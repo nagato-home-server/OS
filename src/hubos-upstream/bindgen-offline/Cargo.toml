@@ -1,0 +1,8 @@
+[package]
+name = "bindgen"
+version = "0.72.1"
+edition = "2021"
+
+[lib]
+path = "lib.rs"
+

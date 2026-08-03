@@ -1,0 +1,14 @@
+[package]
+name = "initialiser"
+version = "2.2.0-dev"
+edition = "2021"
+rust-version = "1.88.0"
+
+[[bin]]
+name = "initialiser"
+path = "src/main.rs"
+
+[profile.release]
+panic = "abort"
+
+[workspace]

@@ -1,0 +1,21 @@
+#
+# Copyright 2025, Colias Group, LLC
+#
+# SPDX-License-Identifier: BSD-2-Clause
+#
+
+[workspace]
+resolver = "3"
+members = [
+    "tool/microkit",
+    "initialiser",
+]
+
+[workspace.dependencies.sel4-capdl-initializer]
+path = "../rust-sel4-offline/crates/sel4-capdl-initializer"
+
+[workspace.dependencies.sel4-capdl-initializer-types]
+path = "../rust-sel4-offline/crates/sel4-capdl-initializer/types"
+
+[profile.release.package.microkit-tool]
+strip = true

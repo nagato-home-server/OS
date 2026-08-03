@@ -1,0 +1,24 @@
+#!/bin/sh
+
+# Copyright 2024, UNSW
+#
+# SPDX-License-Identifier: BSD-2-Clause
+
+set -e
+
+BLOCK_DEV=/dev/vda
+MOUNT_POINT=/mnt
+
+if ! ls "$BLOCK_DEV" >/dev/null;
+then
+    echo "ERROR: virtio block device does not exist!"
+    exit 1
+fi
+
+if ! mount "$BLOCK_DEV" "$MOUNT_POINT";
+then
+    echo "ERROR: failed to mount $BLOCK_DEV"
+    exit 1
+fi
+
+echo "$BLOCK_DEV" successfully mounted at "$MOUNT_POINT"

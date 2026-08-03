@@ -1,0 +1,31 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: seL4
+Upstream-Contact: seL4 team <support@sel4.systems>
+Source: http://sel4.systems
+
+Files:
+  .linkcheck-ignore.yml
+  Cargo.lock
+  example/rust/Cargo.lock
+  example/rust/support/*.json
+  initialiser/support/*.json
+  flake.lock
+  CHANGES.md
+  VERSION
+  docs/assets/microkit_flow.svg
+  docs/assets/microkit_flow.pdf
+  tool/microkit/tests/prefills/small.bin
+  example/mr_prefill/fill.bin
+Copyright: 2024, UNSW
+License: BSD-2-Clause
+
+Files:
+  docs/style/logos/blacktriangle.pdf
+  docs/style/logos/seL4-key.pdf
+Copyright: 2020, Data61, CSIRO (ABN 41 687 119 230)
+License: CC-BY-SA-4.0
+
+Files:
+  docs/style/logos/seL4-Foundation-logo.pdf
+Copyright: seL4 Project a Series of LF Projects, LLC
+License: LicenseRef-Trademark
