@@ -1,0 +1,6 @@
+# Locally calculated after vendoring
+sha256  99bb9d438282237d394309a95f1effa4f91ca1f64f7ad0a0cff0f35e294d07b4  python-cryptography-48.0.0-cargo5.tar.gz
+# Locally computed sha256 checksums
+sha256  3e0c7c091a948b82533ba98fd7cbb40432d6f1a9acbf85f5922d2f99a93ae6bb  LICENSE
+sha256  aac73b3148f6d1d7111dbca32099f68d26c644c6813ae1e4f05f6579aa2663fe  LICENSE.APACHE
+sha256  602c4c7482de6479dd2e9793cda275e5e63d773dacd1eca689232ab7008fb4fb  LICENSE.BSD
