@@ -3,7 +3,8 @@
 set -eu
 
 repo_root="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-remote_url="${GITHUB_REMOTE_URL:-https://github.com/nagato-home-server/OS.git}"
+default_remote_url="git@github.com:nagato-home-server/OS.git"
+remote_url="${GITHUB_REMOTE_URL:-}"
 git_user_name="${GIT_USER_NAME:-nagato-home-server}"
 git_user_email="${GIT_USER_EMAIL:-nagato-home-server@users.noreply.github.com}"
 phase="${1:-all}"
@@ -21,14 +22,21 @@ EOF
 }
 
 ensure_repo() {
+  current_remote_url=""
+
   git -C "$repo_root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || git -C "$repo_root" init
   git -C "$repo_root" config user.name "$git_user_name"
   git -C "$repo_root" config user.email "$git_user_email"
 
   if git -C "$repo_root" remote get-url origin >/dev/null 2>&1; then
-    git -C "$repo_root" remote set-url origin "$remote_url"
+    current_remote_url="$(git -C "$repo_root" remote get-url origin)"
+    if [ -n "$remote_url" ]; then
+      git -C "$repo_root" remote set-url origin "$remote_url"
+    elif [ -z "$current_remote_url" ]; then
+      git -C "$repo_root" remote set-url origin "$default_remote_url"
+    fi
   else
-    git -C "$repo_root" remote add origin "$remote_url"
+    git -C "$repo_root" remote add origin "${remote_url:-$default_remote_url}"
   fi
 
   git -C "$repo_root" branch -M main
