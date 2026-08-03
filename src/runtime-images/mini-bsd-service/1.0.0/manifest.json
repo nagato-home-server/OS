@@ -1,0 +1,20 @@
+{
+  "profile": "mini-bsd-service",
+  "version": "1.0.0",
+  "guest_class": "runtime",
+  "os_family": "bsd",
+  "update_policy": "guest-managed",
+  "source_bundles": [
+    "freebsd-src",
+    "freebsd-ports"
+  ],
+  "artifacts": [
+    "kernel.elf",
+    "rootfs.img"
+  ],
+  "artifact_hashes": {
+    "kernel.elf": "e04e21b3c900625ad85ebad1b4e64484f11321d377064c1a7d43e158e055e316",
+    "rootfs.img": "f641054e7467e27ff1a3565bf908f95e43eec70c28fab61d9dee266d0ecb9cb6"
+  },
+  "note": "Placeholder bundle. Replace artifacts with real payloads."
+}

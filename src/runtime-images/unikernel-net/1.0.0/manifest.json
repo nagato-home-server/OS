@@ -1,0 +1,15 @@
+{
+  "profile": "unikernel-net",
+  "version": "1.0.0",
+  "guest_class": "runtime",
+  "os_family": "unikernel",
+  "update_policy": "guest-managed",
+  "source_bundles": [],
+  "artifacts": [
+    "app.elf"
+  ],
+  "artifact_hashes": {
+    "app.elf": "05b6e158ec5b8dc1a8d1a1c493d4b401ffd9328102b15593426086500d77ae8a"
+  },
+  "note": "Placeholder bundle. Replace artifacts with real payloads."
+}

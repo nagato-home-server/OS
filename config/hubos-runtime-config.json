@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "runtime_catalog": [
+    {
+      "id": "linux-dev",
+      "guest_class": "full",
+      "os_family": "linux",
+      "description": "General-purpose Linux guest for broad app compatibility.",
+      "version": "1.0.0",
+      "update_policy": "guest-managed",
+      "artifacts": {
+        "kernel": "src/runtime-images/linux-dev/1.0.0/kernel.elf",
+        "initramfs": "src/runtime-images/linux-dev/1.0.0/initramfs.cpio.gz",
+        "rootfs": "src/runtime-images/linux-dev/1.0.0/rootfs.img",
+        "device_tree_blob": "",
+        "kernel_cmdline": "console=ttyS0 root=/dev/vda rw"
+      },
+      "resources": {
+        "memory_mb": 1024,
+        "vcpus": 2,
+        "virtio_net": true,
+        "virtio_blk": true,
+        "vgpu": false
+      }
+    },
+    {
+      "id": "mini-bsd-service",
+      "guest_class": "runtime",
+      "os_family": "bsd",
+      "description": "Smaller BSD-style runtime for service-focused app VMs.",
+      "version": "1.0.0",
+      "update_policy": "guest-managed",
+      "artifacts": {
+        "kernel": "src/runtime-images/mini-bsd-service/1.0.0/kernel.elf",
+        "initramfs": "",
+        "rootfs": "src/runtime-images/mini-bsd-service/1.0.0/rootfs.img",
+        "device_tree_blob": "",
+        "kernel_cmdline": "console=ttyS0"
+      },
+      "resources": {
+        "memory_mb": 256,
+        "vcpus": 1,
+        "virtio_net": true,
+        "virtio_blk": false,
+        "vgpu": false
+      }
+    },
+    {
+      "id": "unikernel-net",
+      "guest_class": "runtime",
+      "os_family": "unikernel",
+      "description": "Lean runtime for network-oriented app appliances.",
+      "version": "1.0.0",
+      "update_policy": "guest-managed",
+      "artifacts": {
+        "kernel": "src/runtime-images/unikernel-net/1.0.0/app.elf",
+        "initramfs": "",
+        "rootfs": "",
+        "device_tree_blob": "",
+        "kernel_cmdline": ""
+      },
+      "resources": {
+        "memory_mb": 128,
+        "vcpus": 1,
+        "virtio_net": true,
+        "virtio_blk": false,
+        "vgpu": false
+      }
+    }
+  ],
+  "selection": {
+    "installed_profiles": [
+      "linux-dev",
+      "mini-bsd-service"
+    ],
+    "default_profile": "linux-dev",
+    "app_assignments": {}
+  }
+}

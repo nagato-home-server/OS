@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+     Copyright 2018, Data61, CSIRO
+
+     SPDX-License-Identifier: BSD-2-Clause
+-->
+<manifest>
+
+<!-- include all the common repositories, we just want to define the kernel -->
+<include name="common.xml"/>
+
+<project name="seL4.git" path="kernel"/>
+
+</manifest>

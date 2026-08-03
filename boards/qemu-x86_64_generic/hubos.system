@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<system>
+  <protection_domain name="Root Task" priority="254">
+    <program_image path="root-task.elf" />
+  </protection_domain>
+
+  <protection_domain name="Resource Registry" priority="253">
+    <program_image path="resource-registry.elf" />
+  </protection_domain>
+
+  <protection_domain name="Capability Manager" priority="252">
+    <program_image path="capability-manager.elf" />
+  </protection_domain>
+
+  <protection_domain name="Session Manager" priority="251">
+    <program_image path="session-manager.elf" />
+  </protection_domain>
+
+  <protection_domain name="Hub" priority="250">
+    <program_image path="hub.elf" />
+  </protection_domain>
+
+  <protection_domain name="Memory Manager" priority="200">
+    <program_image path="memory-manager.elf" />
+  </protection_domain>
+
+  <protection_domain name="DMA Manager" priority="190">
+    <program_image path="dma-manager.elf" />
+  </protection_domain>
+
+  <protection_domain name="Driver Registry" priority="180">
+    <program_image path="driver-registry.elf" />
+  </protection_domain>
+
+  <protection_domain name="Driver Loader" priority="170">
+    <program_image path="driver-loader.elf" />
+  </protection_domain>
+
+  <protection_domain name="Bus Managers" priority="160">
+    <program_image path="bus-managers.elf" />
+  </protection_domain>
+
+  <protection_domain name="Driver Service" priority="150">
+    <program_image path="driver-service.elf" />
+  </protection_domain>
+
+  <protection_domain name="Network Server" priority="140">
+    <program_image path="network-server.elf" />
+  </protection_domain>
+
+  <protection_domain name="Device Server" priority="130">
+    <program_image path="device-server.elf" />
+  </protection_domain>
+</system>

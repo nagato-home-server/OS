@@ -1,0 +1,44 @@
+# Local agent metadata
+.agents/
+.codex/
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# CMake / CTest build output
+/build/
+/Testing/
+CMakeCache.txt
+CMakeFiles/
+CTestTestfile.cmake
+cmake_install.cmake
+compile_commands.json
+
+# Native test binaries and archives
+/*.a
+/hubos-model-test
+/hubos_model_test
+
+# Generated Microkit scaffolding
+/microkit-generated/generated/
+
+# Vendored upstream build artifacts and duplicated mirrors
+/src/hubos-upstream/microkit/target/
+/src/hubos-upstream/rust-sel4-offline/target/
+/src/hubos-upstream/src/
+
+# QEMU workspace generated outputs
+/qemu-workspace/build/
+/qemu-workspace/boot-package/
+/qemu-workspace/generated/
+/qemu-workspace/hubos.system
+/qemu-workspace/hubos.xml
+/qemu-workspace/next-steps.txt
+
+# Temporary logs / transcripts
+*.log
+*.tmp

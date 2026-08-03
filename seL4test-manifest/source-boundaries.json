@@ -1,0 +1,134 @@
+{
+  "manifest": {
+    "remote_name": "github",
+    "fetch": "https://github.com",
+    "default_revision": "master"
+  },
+  "native_projects": [
+    {
+      "name": "seL4/seL4.git",
+      "path": "kernel",
+      "revision": "82aaae6a894b8e04c79b10ec9d8c60ef31f98080"
+    },
+    {
+      "name": "seL4/seL4_tools.git",
+      "path": "tools/seL4",
+      "revision": "b82c586910bfd9da73c15cc4f9df5efd74bfd8d8",
+      "linkfiles": [
+        {
+          "src": "cmake-tool/init-build.sh",
+          "dest": "init-build.sh"
+        },
+        {
+          "src": "cmake-tool/griddle",
+          "dest": "griddle"
+        }
+      ]
+    },
+    {
+      "name": "seL4/seL4_libs.git",
+      "path": "projects/seL4_libs",
+      "revision": "4072cc43dc0d717dad5922373a9ea464c9279874"
+    },
+    {
+      "name": "seL4/util_libs.git",
+      "path": "projects/util_libs",
+      "revision": "c38d4171398d301344d3d6a9060a8a1ee6c185d9"
+    },
+    {
+      "name": "seL4/sel4runtime.git",
+      "path": "projects/sel4runtime",
+      "revision": "86489cf6efab9f314964e79468c036e9035394c7"
+    },
+    {
+      "name": "seL4/sel4test.git",
+      "path": "projects/sel4test",
+      "revision": "60b7b47ee0a67f56e15951735a6aa9d270d47f55",
+      "linkfiles": [
+        {
+          "src": "easy-settings.cmake",
+          "dest": "easy-settings.cmake"
+        }
+      ]
+    },
+    {
+      "name": "seL4/sel4_projects_libs.git",
+      "path": "projects/sel4_projects_libs",
+      "revision": "5b3c81127b191232489df09a59b22edead1c9db7"
+    },
+    {
+      "name": "seL4/musllibc.git",
+      "path": "projects/musllibc",
+      "revision": "9798aedbc3ee5fa3c1d7f788e9312df9203e7b0b"
+    },
+    {
+      "name": "seL4/microkit.git",
+      "path": "tools/microkit",
+      "revision": "b5cd889fad2472bb9d15f404b9d323b766726d47"
+    },
+    {
+      "name": "seL4/camkes-tool.git",
+      "path": "tools/camkes-tool",
+      "revision": "d6db375dbfae85a871956dd2281e827444dec1b3"
+    },
+    {
+      "name": "seL4/sel4bench.git",
+      "path": "projects/sel4bench",
+      "revision": "e19fff3e5ae9f03b3ac9a3a3b16c609842bd9be5"
+    },
+    {
+      "name": "lwip-tcpip/lwip.git",
+      "path": "projects/lwip",
+      "revision": "3d896ba0a37ff3ce73270ca5e230707fe47f60e3"
+    },
+    {
+      "name": "riscv/opensbi.git",
+      "path": "tools/opensbi",
+      "revision": "a8be5e9478be08f09a720f7013ec30d6e2bd9fcc"
+    },
+    {
+      "name": "nanopb/nanopb.git",
+      "path": "tools/nanopb",
+      "revision": "4afc29748baa321885e5405153dbcb2f184f2636"
+    }
+  ],
+  "optional_backends": [
+    {
+      "name": "NetworkManager",
+      "repository": "NetworkManager/NetworkManager",
+      "local_mirror": "NetworkManager",
+      "mode": "linux-vm"
+    }
+  ],
+  "driver_projects": [],
+  "board_targets": {
+    "default": "qemu-x86_64_generic",
+    "boards": [
+      {
+        "name": "qemu-x86_64_generic",
+        "microkit_board": "x86_64_generic",
+        "system": "boards/qemu-x86_64_generic/hubos.system",
+        "driver_projects": []
+      }
+    ]
+  },
+  "hubos_owned_wrappers": [
+    "resource-registry",
+    "capability-manager",
+    "session-manager",
+    "hub",
+    "driver-registry",
+    "driver-loader",
+    "driver-service",
+    "network-server",
+    "root-task",
+    "microkit-runtime",
+    "microkit-generated-stubs",
+    "boot-manifest"
+  ],
+  "integration_points": {
+    "native_manifest": "seL4test-manifest/hubos.xml",
+    "local_upstream_mirror": "src/hubos-upstream",
+    "generated_workspace": "generated"
+  }
+}

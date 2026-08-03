@@ -1,0 +1,22 @@
+{
+  "profile": "linux-dev",
+  "version": "1.0.0",
+  "guest_class": "full",
+  "os_family": "linux",
+  "update_policy": "guest-managed",
+  "source_bundles": [
+    "linux-kernel",
+    "buildroot"
+  ],
+  "artifacts": [
+    "kernel.elf",
+    "initramfs.cpio.gz",
+    "rootfs.img"
+  ],
+  "artifact_hashes": {
+    "kernel.elf": "2602c46fd19da5ac16986db9fd8d90227f310b1e5d04118d03873c5a11ba3d68",
+    "initramfs.cpio.gz": "bcbd23fd825ef20aa5116085e21223614017513459938fbc4ba203396fe358e3",
+    "rootfs.img": "d19aac3c1ff4e04231c3d86394c8b11c26fb359e7a59e9ecfd0402ac032cbb2d"
+  },
+  "note": "Placeholder bundle. Replace artifacts with real payloads."
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "bundles": [
+    {
+      "profile": "linux-dev",
+      "version": "1.0.0",
+      "path": "src/runtime-images/linux-dev/1.0.0"
+    },
+    {
+      "profile": "mini-bsd-service",
+      "version": "1.0.0",
+      "path": "src/runtime-images/mini-bsd-service/1.0.0"
+    },
+    {
+      "profile": "unikernel-net",
+      "version": "1.0.0",
+      "path": "src/runtime-images/unikernel-net/1.0.0"
+    }
+  ]
+}

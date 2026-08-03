@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "sources": {
+    "nano": {
+      "path": "src/tool-src/nano/upstream",
+      "revision": "e1d954c739bd8a5d19fc1861c224fb7d03606e8d"
+    },
+    "linux-kernel": {
+      "path": "src/runtime-src/linux-kernel",
+      "revision": "780d569e6c4b422290f5cba319eb904b355d64be"
+    },
+    "buildroot": {
+      "path": "src/runtime-src/buildroot",
+      "revision": "606f9ecbdec0b814e1fd6f07635985fbbf61e62c"
+    },
+    "freebsd-src": {
+      "path": "src/runtime-src/freebsd-src",
+      "revision": "e4f3ab161a9e149fd2f657f6d8af2ba3c618255f"
+    },
+    "freebsd-ports": {
+      "path": "src/runtime-src/freebsd-ports",
+      "revision": "f56b9d9907954643e85277287ce023a8a9522932"
+    }
+  }
+}
