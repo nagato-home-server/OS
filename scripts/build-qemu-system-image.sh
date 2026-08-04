@@ -188,36 +188,32 @@ build_component() {
     -c "$src" \
     -o "$obj"
 
-  if [ "$slug" = "root-task" ] ||
-     [ "$slug" = "bus-managers" ] ||
-     [ "$slug" = "device-server" ]; then
-    for runtime_src in $root_task_runtime_sources; do
-      runtime_obj="$build_dir/${slug}-$(basename "$runtime_src" .c).o"
-      "$gcc_compiler" \
-        -std=gnu11 \
-        -g -O2 \
-        -nostdlib \
-        -ffreestanding \
-        -DCONFIG_PRINTING \
-        -fno-pie \
-        -fno-pic \
-        -fno-stack-protector \
-        -Wall \
-        -Wextra \
-        -Werror \
-        -Wno-unused-function \
-        -Wno-unused-parameter \
-        -march=x86-64 \
-        -mtune=generic \
-        -I"$component_src_dir/$slug" \
-        -I"$board_include" \
-        -I"$sdk_source/libmicrokit/include" \
-        -I"$repo_root/include" \
-        -c "$runtime_src" \
-        -o "$runtime_obj"
-      link_objects="$link_objects $runtime_obj"
-    done
-  fi
+  for runtime_src in $root_task_runtime_sources; do
+    runtime_obj="$build_dir/${slug}-$(basename "$runtime_src" .c).o"
+    "$gcc_compiler" \
+      -std=gnu11 \
+      -g -O2 \
+      -nostdlib \
+      -ffreestanding \
+      -DCONFIG_PRINTING \
+      -fno-pie \
+      -fno-pic \
+      -fno-stack-protector \
+      -Wall \
+      -Wextra \
+      -Werror \
+      -Wno-unused-function \
+      -Wno-unused-parameter \
+      -march=x86-64 \
+      -mtune=generic \
+      -I"$component_src_dir/$slug" \
+      -I"$board_include" \
+      -I"$sdk_source/libmicrokit/include" \
+      -I"$repo_root/include" \
+      -c "$runtime_src" \
+      -o "$runtime_obj"
+    link_objects="$link_objects $runtime_obj"
+  done
 
   "$gcc_compiler" \
     -nostdlib \

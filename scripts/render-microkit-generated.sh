@@ -391,6 +391,7 @@ EOF
 #include "component.h"
 #include "hubos/microkit_kernel_glue.h"
 #include "hubos/microkit_runtime.h"
+#include "hubos/root_task_shell.h"
 #include "hubos/runtime_config.h"
 #include "hubos/system.h"
 #include "hubos/microkit_transport.h"
@@ -511,225 +512,58 @@ static void hubos_generated_shell_prompt(void) {
   hubos_generated_serial_puts("hubos> ");
 }
 
-static bool hubos_generated_shell_starts_with(const char *text, const char *prefix) {
-  if (text == NULL || prefix == NULL) {
-    return false;
-  }
-
-  while (*prefix != '\0') {
-    if (*text != *prefix) {
-      return false;
-    }
-    ++text;
-    ++prefix;
-  }
-
-  return true;
+static void hubos_generated_shell_io_puts(const char *text, void *context) {
+  (void)context;
+  hubos_generated_serial_puts(text);
 }
 
-static bool hubos_generated_shell_equals(const char *lhs, const char *rhs) {
-  if (lhs == NULL || rhs == NULL) {
-    return false;
-  }
-
-  while (*lhs != '\0' && *rhs != '\0' && *lhs == *rhs) {
-    ++lhs;
-    ++rhs;
-  }
-
-  return *lhs == '\0' && *rhs == '\0';
+static void hubos_generated_shell_io_putu64(uint64_t value, void *context) {
+  (void)context;
+  hubos_generated_serial_putu64(value);
 }
 
-static const char *hubos_generated_shell_skip_spaces(const char *text) {
-  while (text != NULL && (*text == ' ' || *text == '\t')) {
-    ++text;
-  }
-
-  return text;
-}
-
-static void hubos_generated_shell_print_vm_status(void) {
-  hubos_vm_server_t *vm = &hubos_generated_system.vm_server;
-  const char *state = "unknown";
-
-  switch (vm->state) {
-  case HUBOS_VM_STOPPED:
-    state = "stopped";
-    break;
-  case HUBOS_VM_BOOTING:
-    state = "booting";
-    break;
-  case HUBOS_VM_RUNNING:
-    state = "running";
-    break;
-  case HUBOS_VM_FAILED:
-    state = "failed";
-    break;
-  }
-
-  hubos_generated_serial_puts("vm.state=");
-  hubos_generated_serial_puts(state);
-  hubos_generated_serial_puts("\nvm.profile=");
-  hubos_generated_serial_puts(vm->runtime_profile != NULL && vm->runtime_profile->id != NULL
-                                ? vm->runtime_profile->id
-                                : "(none)");
-  hubos_generated_serial_puts("\nvm.vcpus=");
-  hubos_generated_serial_putu64(vm->vm.vcpu_count);
-  hubos_generated_serial_puts("\nvm.guest_memory_id=");
-  hubos_generated_serial_putu64(vm->vm.guest_memory_id);
-  hubos_generated_serial_puts("\n");
-}
-
-static void hubos_generated_shell_print_services(void) {
-  hubos_service_descriptor_t descriptor = {0};
-
-  if (hubos_system_describe_vm(&hubos_generated_system, &descriptor)) {
-    hubos_generated_serial_puts("service.vm=");
-    hubos_generated_serial_puts(descriptor.name != NULL ? descriptor.name : "vm");
-    hubos_generated_serial_puts(" state=");
-    hubos_generated_serial_putu64(descriptor.resource_state);
-    hubos_generated_serial_puts("\n");
-  }
-
-  if (hubos_system_describe_network_server(&hubos_generated_system, &descriptor)) {
-    hubos_generated_serial_puts("service.network=");
-    hubos_generated_serial_puts(descriptor.name != NULL ? descriptor.name : "network");
-    hubos_generated_serial_puts(" state=");
-    hubos_generated_serial_putu64(descriptor.resource_state);
-    hubos_generated_serial_puts("\n");
-  }
-
-  if (hubos_system_describe_device(&hubos_generated_system, &descriptor)) {
-    hubos_generated_serial_puts("service.device=");
-    hubos_generated_serial_puts(descriptor.name != NULL ? descriptor.name : "device");
-    hubos_generated_serial_puts(" state=");
-    hubos_generated_serial_putu64(descriptor.resource_state);
-    hubos_generated_serial_puts("\n");
-  }
-}
-
-static void hubos_generated_shell_list_profiles(void) {
-  size_t profile_count = 0;
-  const hubos_app_vm_runtime_profile_t *profiles = hubos_runtime_config_profiles(&profile_count);
-
-  hubos_generated_serial_puts("profiles:");
-  if (profiles == NULL || profile_count == 0u) {
-    hubos_generated_serial_puts(" none\n");
-    return;
-  }
-
-  for (size_t index = 0; index < profile_count; ++index) {
-    hubos_generated_serial_puts(index == 0u ? " " : ", ");
-    hubos_generated_serial_puts(profiles[index].id != NULL ? profiles[index].id : "(unnamed)");
-  }
-  hubos_generated_serial_puts("\n");
-}
-
-static void hubos_generated_shell_select_profile(const char *profile_id) {
-  size_t profile_count = 0;
-  const hubos_app_vm_runtime_profile_t *profiles = hubos_runtime_config_profiles(&profile_count);
-  const hubos_app_vm_runtime_profile_t *profile =
-    hubos_app_vm_runtime_catalog_find(profiles, profile_count, profile_id);
-
-  if (profile == NULL) {
-    hubos_generated_serial_puts("unknown profile\n");
-    return;
-  }
-
-  if (!hubos_system_select_vm_runtime_profile(&hubos_generated_system, profile)) {
-    hubos_generated_serial_puts("failed to select profile\n");
-    return;
-  }
-
-  hubos_generated_serial_puts("selected profile ");
-  hubos_generated_serial_puts(profile->id);
-  hubos_generated_serial_puts("\n");
-}
-
-static void hubos_generated_shell_execute(const char *line) {
-  const char *arg = NULL;
+static int hubos_generated_shell_tokenize(char *line, char **argv, int capacity) {
+  int argc = 0;
+  char *cursor = line;
 
   if (line == NULL || line[0] == '\0') {
-    return;
+    return 0;
   }
 
-  if (hubos_generated_shell_equals(line, "help")) {
-    hubos_generated_serial_puts(
-      "commands: help status services vm status vm start vm stop vm restart vm profile vm profiles vm profile <id>\n");
-    return;
-  }
-
-  if (hubos_generated_shell_equals(line, "status") ||
-      hubos_generated_shell_equals(line, "vm status")) {
-    hubos_generated_shell_print_vm_status();
-    return;
-  }
-
-  if (hubos_generated_shell_equals(line, "services")) {
-    hubos_generated_shell_print_services();
-    return;
-  }
-
-  if (hubos_generated_shell_equals(line, "vm start")) {
-    if (hubos_generated_system.vm_server.state == HUBOS_VM_RUNNING) {
-      hubos_generated_serial_puts("vm already running\n");
-      return;
+  while (*cursor != '\0' && argc < capacity) {
+    while (*cursor == ' ' || *cursor == '\t') {
+      ++cursor;
     }
-    if (hubos_system_start_vm(&hubos_generated_system) &&
-        hubos_system_complete_vm_boot(&hubos_generated_system)) {
-      hubos_generated_serial_puts("vm started\n");
-    } else {
-      hubos_generated_serial_puts("vm start failed\n");
+
+    if (*cursor == '\0') {
+      break;
     }
-    return;
-  }
 
-  if (hubos_generated_shell_equals(line, "vm stop")) {
-    if (hubos_system_stop_vm(&hubos_generated_system)) {
-      hubos_generated_serial_puts("vm stopped\n");
-    } else {
-      hubos_generated_serial_puts("vm stop failed\n");
+    argv[argc++] = cursor;
+    while (*cursor != '\0' && *cursor != ' ' && *cursor != '\t') {
+      ++cursor;
     }
-    return;
-  }
-
-  if (hubos_generated_shell_equals(line, "vm restart")) {
-    (void)hubos_system_stop_vm(&hubos_generated_system);
-    if (hubos_system_start_vm(&hubos_generated_system) &&
-        hubos_system_complete_vm_boot(&hubos_generated_system)) {
-      hubos_generated_serial_puts("vm restarted\n");
-    } else {
-      hubos_generated_serial_puts("vm restart failed\n");
+    if (*cursor == '\0') {
+      break;
     }
-    return;
+    *cursor++ = '\0';
   }
 
-  if (hubos_generated_shell_equals(line, "vm profile")) {
-    hubos_generated_serial_puts("current profile ");
-    hubos_generated_serial_puts(hubos_generated_system.vm_server.runtime_profile != NULL &&
-                                  hubos_generated_system.vm_server.runtime_profile->id != NULL
-                                  ? hubos_generated_system.vm_server.runtime_profile->id
-                                  : "(none)");
-    hubos_generated_serial_puts("\n");
-    return;
-  }
+  return argc;
+}
 
-  if (hubos_generated_shell_equals(line, "vm profiles")) {
-    hubos_generated_shell_list_profiles();
-    return;
-  }
+static void hubos_generated_shell_execute(char *line) {
+  char *argv[10];
+  hubos_root_task_shell_io_t io = {
+    .puts_fn = hubos_generated_shell_io_puts,
+    .putu64_fn = hubos_generated_shell_io_putu64,
+    .context = NULL,
+  };
+  int argc = hubos_generated_shell_tokenize(line, argv, (int)(sizeof(argv) / sizeof(argv[0])));
 
-  if (hubos_generated_shell_starts_with(line, "vm profile ")) {
-    arg = hubos_generated_shell_skip_spaces(line + 11);
-    if (arg == NULL || arg[0] == '\0') {
-      hubos_generated_serial_puts("missing profile id\n");
-      return;
-    }
-    hubos_generated_shell_select_profile(arg);
-    return;
+  if (argc > 0) {
+    (void)hubos_root_task_shell_execute(&hubos_generated_system, argc, argv, &io);
   }
-
-  hubos_generated_serial_puts("unknown command\n");
 }
 
 static void hubos_generated_shell_run(void) {
