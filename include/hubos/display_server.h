@@ -63,15 +63,19 @@ static inline bool hubos_display_server_finalize_namespace(hubos_display_server_
 
 static inline bool hubos_display_server_describe(const hubos_display_server_t *server,
                                                  hubos_service_descriptor_t *out_descriptor) {
+  const char *name = NULL;
+
   if (server == NULL || out_descriptor == NULL) {
     return false;
   }
 
-  out_descriptor->resource_id = server->namespace_handle.id;
-  out_descriptor->name = server->namespace_handle.name;
-  out_descriptor->name_len = server->namespace_handle.name != NULL ?
-                               strlen(server->namespace_handle.name) :
-                               0;
+  name = server->namespace_handle.name != NULL ? server->namespace_handle.name : "display-server";
+
+  out_descriptor->resource_id = server->namespace_handle.id != HUBOS_ID_INVALID ?
+                                  server->namespace_handle.id :
+                                  server->id;
+  out_descriptor->name = name;
+  out_descriptor->name_len = strlen(name);
   if (hubos_shared_resource_is_pending_finalization(&server->namespace_handle.lifecycle)) {
     out_descriptor->resource_state = HUBOS_RESOURCE_QUARANTINED;
   } else if (server->namespace_handle.lifecycle.state == HUBOS_SHARED_RESOURCE_RETIRED) {
@@ -81,9 +85,9 @@ static inline bool hubos_display_server_describe(const hubos_display_server_t *s
                                        HUBOS_RESOURCE_READY :
                                        HUBOS_RESOURCE_DISCOVERED;
   }
-  out_descriptor->endpoint = server->namespace_handle.name;
+  out_descriptor->endpoint = name;
   out_descriptor->version = NULL;
-  out_descriptor->policy_hints = 0;
+  out_descriptor->policy_hints = (unsigned)(server->namespace_handle.owned_by_server ? 1u : 0u);
   return true;
 }
 

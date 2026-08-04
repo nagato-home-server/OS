@@ -419,22 +419,31 @@ bool hubos_network_server_set_failover_policy(hubos_network_server_t *server,
 
 bool hubos_network_server_describe(const hubos_network_server_t *server,
                                    hubos_service_descriptor_t *out_descriptor) {
-  if (server == NULL || out_descriptor == NULL || !server->namespace_bound) {
+  const char *name = NULL;
+
+  if (server == NULL || out_descriptor == NULL) {
     return false;
   }
 
-  out_descriptor->resource_id = server->namespace_handle.id;
-  out_descriptor->name = server->namespace_handle.name;
-  out_descriptor->name_len = server->namespace_handle.name != NULL ?
-                               strlen(server->namespace_handle.name) :
-                               0;
-  out_descriptor->resource_state = server->namespace_bound ? HUBOS_RESOURCE_READY
-                                                           : HUBOS_RESOURCE_CLASSIFIED;
-  out_descriptor->endpoint = server->namespace_handle.name;
+  name = server->namespace_handle.name != NULL ? server->namespace_handle.name :
+         (server->backend_kind == HUBOS_NETWORK_BACKEND_NETWORKMANAGER ?
+            "networkmanager" :
+            "network-server");
+
+  out_descriptor->resource_id = server->namespace_bound ? server->namespace_handle.id : server->id;
+  out_descriptor->name = name;
+  out_descriptor->name_len = strlen(name);
+  out_descriptor->resource_state = server->namespace_bound ? HUBOS_RESOURCE_READY :
+                                   HUBOS_RESOURCE_DISCOVERED;
+  out_descriptor->endpoint = name;
   out_descriptor->version = NULL;
-  out_descriptor->policy_hints = (unsigned)(server->routing_enabled ? 1u : 0u) |
-                                 (unsigned)(server->firewall_enabled ? 2u : 0u) |
-                                 (unsigned)(server->failover_enabled ? 4u : 0u);
+  out_descriptor->policy_hints = (unsigned)(server->namespace_bound ? 1u : 0u) |
+                                 (unsigned)(server->routing_enabled ? 2u : 0u) |
+                                 (unsigned)(server->firewall_enabled ? 4u : 0u) |
+                                 (unsigned)(server->failover_enabled ? 8u : 0u) |
+                                 (unsigned)(server->default_route_nic_resource_id != HUBOS_ID_INVALID ? 16u : 0u) |
+                                 (unsigned)(server->selected_nic_resource_id != HUBOS_ID_INVALID ? 32u : 0u) |
+                                 (unsigned)(server->backend_kind == HUBOS_NETWORK_BACKEND_NETWORKMANAGER ? 64u : 0u);
   return true;
 }
 
