@@ -389,6 +389,9 @@ EOF
 #include <stddef.h>
 #include "component.h"
 #include "channel-map.h"
+#include "hubos/microkit_kernel_glue.h"
+#include "hubos/microkit_runtime.h"
+#include "hubos/system.h"
 #include "hubos/microkit_transport.h"
 
 /*
@@ -416,8 +419,13 @@ EOF
  *   generated image under QEMU
  */
 
+static hubos_system_t hubos_generated_system;
+static hubos_microkit_runtime_t hubos_generated_runtime;
+
 static void hubos_generated_bootstrap(void) {
-  (void)HUBOS_MICROKIT_COMPONENT_NAME;
+  hubos_system_init(&hubos_generated_system, "root-key");
+  hubos_microkit_runtime_init(&hubos_generated_runtime, &hubos_generated_system);
+  (void)hubos_microkit_kernel_bootstrap(&hubos_generated_runtime);
 }
 
 static bool hubos_generated_supports_endpoint(void) {

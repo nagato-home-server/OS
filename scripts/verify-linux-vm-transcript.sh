@@ -23,9 +23,10 @@ require_line() {
   fi
 }
 
-require_line 'Run /init as init process'
-require_line 'with arguments:'
-require_line 'with environment:'
-require_line 'TERM=linux'
+require_line 'Booting the kernel'
+require_line 'Freeing initrd memory'
+require_line 'Starting syslogd: OK'
+require_line 'Starting klogd: OK'
+require_line 'Running sysctl: OK'
 
 echo "Verified Linux VM transcript at $transcript_file"

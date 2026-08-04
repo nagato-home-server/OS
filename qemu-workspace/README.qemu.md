@@ -12,14 +12,15 @@ Boot flow:
 ./run-qemu.sh <sel4_32.elf> <loader.img>
 ```
 
-The pair is the x86-64 seL4 boot path. QEMU lands in the seL4 console first;
-Root Task then publishes the service endpoints and starts the Linux VM from
-the seL4 control plane.
+The pair is the x86-64 seL4 boot path. QEMU lands in the seL4 console first.
+In the current repository snapshot, the control-plane components boot and log
+their init markers, and HubOS now emits VM control-plane confirmation for the
+default `linux-dev` guest profile.
 The current launcher still consumes the `sel4_32.elf` compatibility copy, but
 the canonical kernel artifact is `sel4.elf`.
 
-Once the Linux VM is up, use the guest console checks below to validate the
-runtime path:
+Once the HubOS console reports the VM startup markers, use the standalone
+guest checks below if you want a direct Linux serial transcript as well:
 
 - `ip a`
 - `ip route`
@@ -31,3 +32,10 @@ For capture, set one or both of:
 
 - `QEMU_TRANSCRIPT_FILE` to record the interactive console with `script(1)`
 - `QEMU_LOG_FILE` to write QEMU's debug log via `-D`
+
+To smoke-test the current HubOS QEMU image and confirm the seL4 / Microkit
+console reaches the expected init markers, use:
+
+```sh
+../scripts/smoke-hubos-qemu.sh ./build/sel4_32.elf ./build/loader.img /tmp/hubos-qemu.log
+```

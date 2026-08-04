@@ -32,8 +32,8 @@ The launcher expects a kernel image and an initrd image:
 ```
 
 That pair is the seL4 boot path. QEMU should land in the seL4 console first;
-Root Task then publishes the service endpoints and starts the Linux VM or
-another app from the seL4 control plane.
+Root Task then publishes the service endpoints and drives the VM control-plane
+startup path for the default `linux-dev` guest profile.
 
 To build the bootable image from the local upstream mirror and the staged
 Microkit SDK, run:
@@ -50,14 +50,33 @@ The default boot path is therefore:
 
 1. boot seL4 through the x86-64 Microkit `sel4.elf` image plus the QEMU compatibility `sel4_32.elf` copy and `loader.img`
 2. reach the seL4 console
-3. let Root Task start the Linux VM
-4. validate the guest with `ip a`, `ip route`, `lsblk`, `fdisk -l`, and
-   `dmesg | tail`
+3. observe the HubOS control-plane init markers on the seL4 console
+4. confirm the HubOS console prints the VM control-plane markers:
+   `VM Server: runtime profile=linux-dev`, `VM Server: boot complete`, and
+   `Linux VM: control-plane startup confirmed`
+5. if you need a guest serial boot transcript, validate the standalone Linux
+   image with `./scripts/smoke-linux-vm.sh /tmp/linux-vm.log`
 
 For log capture, set one or both of:
 
 - `QEMU_TRANSCRIPT_FILE` to record the terminal session with `script(1)`
 - `QEMU_LOG_FILE` to write QEMU's debug log via `-D`
+
+To smoke-test the current HubOS image under QEMU and verify that the control
+plane reaches the expected console markers, run:
+
+```sh
+./scripts/smoke-hubos-qemu.sh \
+  ./qemu-workspace/build/sel4_32.elf \
+  ./qemu-workspace/build/loader.img \
+  /tmp/hubos-qemu.log
+```
+
+For the standalone Linux guest smoke test, use:
+
+```sh
+./scripts/smoke-linux-vm.sh /tmp/linux-vm.log
+```
 
 If you only have a build directory, set `HUBOS_BOOT_IMAGE_BUILD_DIR` instead.
 The packaging scripts will scan that directory for a Microkit/seL4 image and

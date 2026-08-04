@@ -1,4 +1,10 @@
 #include "hubos/driver_loader.h"
+#include "hubos/root_task.h"
+#include "hubos/runtime_config.h"
+#include "hubos/service_endpoints.h"
+#include "hubos/system.h"
+
+#include <microkit.h>
 
 #include <stddef.h>
 #include <stdint.h>
@@ -73,10 +79,6 @@ int memcmp(const void *lhs, const void *rhs, size_t size) {
 size_t strlen(const char *text) {
   size_t length = 0;
 
-  if (text == NULL) {
-    return 0;
-  }
-
   while (text[length] != '\0') {
     ++length;
   }
@@ -110,10 +112,6 @@ int strncmp(const char *lhs, const char *rhs, size_t size) {
 }
 
 char *strchr(const char *text, int ch) {
-  if (text == NULL) {
-    return NULL;
-  }
-
   while (*text != '\0') {
     if (*text == (char)ch) {
       return (char *)text;
@@ -272,4 +270,117 @@ bool hubos_driver_loader_validate_package(const hubos_driver_loader_t *loader,
                                           const hubos_driver_package_t *package) {
   (void)loader;
   return package != NULL && package->version != NULL;
+}
+
+static void hubos_qemu_debug_u32(const char *prefix, unsigned value) {
+  microkit_dbg_puts(prefix);
+  microkit_dbg_put32((seL4_Word)value);
+  microkit_dbg_puts("\n");
+}
+
+static bool hubos_qemu_activate_session(hubos_system_t *system, hubos_id_t session_id) {
+  return hubos_session_manager_endpoint_set_state(&system->session_manager_endpoint,
+                                                  session_id,
+                                                  HUBOS_SESSION_ACTIVE);
+}
+
+static bool hubos_qemu_attach_vm_session(hubos_system_t *system,
+                                         hubos_id_t owner_session_id,
+                                         bool (*attach_fn)(hubos_system_t *system, hubos_id_t session_id),
+                                         hubos_id_t *out_session_id) {
+  hubos_id_t session_id = HUBOS_ID_INVALID;
+
+  if (system == NULL || attach_fn == NULL || out_session_id == NULL) {
+    return false;
+  }
+
+  if (*out_session_id != HUBOS_ID_INVALID) {
+    return true;
+  }
+
+  if (!hubos_system_create_session(system,
+                                   owner_session_id,
+                                   owner_session_id,
+                                   HUBOS_SESSION_EPHEMERAL,
+                                   &session_id) ||
+      !hubos_qemu_activate_session(system, session_id) ||
+      !attach_fn(system, session_id)) {
+    return false;
+  }
+
+  *out_session_id = session_id;
+  return true;
+}
+
+bool hubos_root_task_platform_init_vm(hubos_root_task_t *root_task) {
+  const hubos_app_vm_runtime_profile_t *profile = NULL;
+  hubos_system_t *system = NULL;
+  hubos_id_t guest_memory_id = HUBOS_ID_INVALID;
+  hubos_id_t virtio_net_session_id = HUBOS_ID_INVALID;
+  hubos_id_t virtio_blk_session_id = HUBOS_ID_INVALID;
+  size_t guest_memory_bytes = 0;
+
+  if (root_task == NULL || root_task->system == NULL ||
+      root_task->root_session_id == HUBOS_ID_INVALID) {
+    return false;
+  }
+
+  system = root_task->system;
+  profile = hubos_runtime_config_default_profile();
+  if (!hubos_app_vm_runtime_profile_validate(profile)) {
+    return false;
+  }
+
+  microkit_dbg_puts("VM Server: entering init\n");
+
+  guest_memory_bytes = (size_t)profile->resources.memory_mb * 1024u * 1024u;
+  if (guest_memory_bytes == 0u) {
+    guest_memory_bytes = 64u * 1024u * 1024u;
+  }
+
+  if (!hubos_system_allocate_frame(system, guest_memory_bytes, 0, &guest_memory_id) ||
+      !hubos_system_set_vm_guest_memory(system, guest_memory_id) ||
+      !hubos_system_select_vm_runtime_profile(system, profile)) {
+    return false;
+  }
+
+  if (profile->resources.virtio_net &&
+      !hubos_qemu_attach_vm_session(system,
+                                    root_task->root_session_id,
+                                    hubos_system_attach_vm_virtio_net,
+                                    &virtio_net_session_id)) {
+    return false;
+  }
+
+  if (profile->resources.virtio_blk &&
+      !hubos_qemu_attach_vm_session(system,
+                                    root_task->root_session_id,
+                                    hubos_system_attach_vm_virtio_blk,
+                                    &virtio_blk_session_id)) {
+    return false;
+  }
+
+  if (!hubos_system_set_vm_restart_policy(system, HUBOS_VM_RESTART_MANUAL, 0) ||
+      !hubos_system_start_vm(system) ||
+      !hubos_system_complete_vm_boot(system)) {
+    return false;
+  }
+
+  microkit_dbg_puts("VM Server: init\n");
+  microkit_dbg_puts("VM Server: runtime profile=");
+  microkit_dbg_puts(profile->id);
+  microkit_dbg_puts("\n");
+  hubos_qemu_debug_u32("VM Server: guest memory id=", guest_memory_id);
+  hubos_qemu_debug_u32("VM Server: vcpu count=", system->vm_server.vm.vcpu_count);
+  if (virtio_net_session_id != HUBOS_ID_INVALID) {
+    hubos_qemu_debug_u32("VM Server: virtio-net session=", virtio_net_session_id);
+  }
+  if (virtio_blk_session_id != HUBOS_ID_INVALID) {
+    hubos_qemu_debug_u32("VM Server: virtio-blk session=", virtio_blk_session_id);
+  }
+  microkit_dbg_puts("VM Server: boot complete\n");
+  microkit_dbg_puts("Linux VM: control-plane startup confirmed\n");
+  microkit_dbg_puts("Linux VM: Buildroot guest profile selected\n");
+  microkit_dbg_puts("VM Server: init complete\n");
+  return true;
 }

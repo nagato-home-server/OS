@@ -24,6 +24,11 @@ static const char *const hubos_root_task_driver_registry_resource_name = "servic
 static const char *const hubos_root_task_bootstrap_driver_package = "hubos.control-plane";
 static const char *const hubos_root_task_bootstrap_driver_version = "bootstrap";
 
+__attribute__((weak)) bool hubos_root_task_platform_init_vm(hubos_root_task_t *root_task) {
+  (void)root_task;
+  return true;
+}
+
 static bool hubos_root_task_register_resource(hubos_root_task_t *root_task,
                                               hubos_id_t *resource_id,
                                               const char *name) {
@@ -179,6 +184,10 @@ bool hubos_root_task_bootstrap(hubos_root_task_t *root_task) {
   }
 
   if (!hubos_root_task_seed_control_plane(root_task)) {
+    return false;
+  }
+
+  if (!hubos_root_task_platform_init_vm(root_task)) {
     return false;
   }
 

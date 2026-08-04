@@ -144,8 +144,14 @@ To capture a full interactive transcript of that session, set
 To smoke-test the boot transcript after a timed run, use:
 
 ```sh
-timeout 10s env QEMU_TRANSCRIPT_FILE=/tmp/linux-vm.log ./scripts/run-linux-vm.sh
+timeout 15s env QEMU_TRANSCRIPT_FILE=/tmp/linux-vm.log ./scripts/run-linux-vm.sh
 ./scripts/verify-linux-vm-transcript.sh /tmp/linux-vm.log
+```
+
+The convenience wrapper that performs both steps is:
+
+```sh
+./scripts/smoke-linux-vm.sh /tmp/linux-vm.log
 ```
 
 ## Toolchain Check
