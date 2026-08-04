@@ -240,7 +240,7 @@ static inline void hubos_root_task_shell_help(const hubos_root_task_shell_io_t *
     "storage status|bind-ns <id> <owner> <name>|release|finalize "
     "display status|bind-ns <id> <owner> <name>|release|finalize "
     "device status|owner <session>|release|reset|quarantine|clear|attach-mmio <session>|attach-irq <session>|attach-dma <session> "
-    "vm status|start|stop|restart|profile|profiles|profile <id>|vcpus <count>|guest-memory <id>|restart-policy manual|auto [count]|attach-net <session>|attach-blk <session>|attach-vgpu <session>|describe\n");
+    "vm status|start|stop|restart|profile|profiles|profile <id>|vcpus <count>|guest-memory <id>|restart-policy manual|auto [count]|attach-net <session>|attach-blk <session>|attach-vgpu <session>|console status|attach|detach|write <token>|describe\n");
 }
 
 static inline void hubos_root_task_shell_print_vm_status(hubos_system_t *system,
@@ -278,6 +278,30 @@ static inline void hubos_root_task_shell_print_vm_status(hubos_system_t *system,
   hubos_root_task_shell_write_kv_u64(io, "vm.restart_attempts=", vm->restart_attempts);
   hubos_root_task_shell_write_kv_u64(io, "vm.max_restart_attempts=", vm->max_restart_attempts);
   hubos_root_task_shell_write_kv_u64(io, "vm.last_failure_code=", vm->last_failure_code);
+}
+
+static inline void hubos_root_task_shell_print_vm_console_status(hubos_system_t *system,
+                                                                 const hubos_root_task_shell_io_t *io) {
+  const hubos_vm_server_t *vm = &system->vm_server;
+
+  hubos_root_task_shell_write_kv(io,
+                                 "vm.console=",
+                                 vm->console_relay_available ? "available" : "unavailable");
+  hubos_root_task_shell_write_kv(io,
+                                 "vm.console.attached=",
+                                 vm->console_attached ? "true" : "false");
+  hubos_root_task_shell_write_kv(io,
+                                 "vm.console.backend=",
+                                 vm->console_backend_name != NULL ?
+                                   vm->console_backend_name :
+                                   vm->backend_name);
+  hubos_root_task_shell_write_kv_u64(io, "vm.console.tx_bytes=", vm->console_tx_bytes);
+  hubos_root_task_shell_write_kv_u64(io, "vm.console.rx_bytes=", vm->console_rx_bytes);
+  if (!vm->console_relay_available) {
+    hubos_root_task_shell_write_kv(io, "vm.console.reason=", "guest serial relay not wired");
+  } else if (vm->state != HUBOS_VM_RUNNING) {
+    hubos_root_task_shell_write_kv(io, "vm.console.reason=", "vm not running");
+  }
 }
 
 static inline void hubos_root_task_shell_print_services(hubos_system_t *system,
@@ -818,6 +842,40 @@ static inline bool hubos_root_task_shell_execute(hubos_system_t *system,
         hubos_root_task_shell_print_descriptor(io, "vm.name=", &descriptor);
       }
       return true;
+    }
+    if (argc == 2 && hubos_root_task_shell_literal_equals(argv[1], "console")) {
+      hubos_root_task_shell_print_vm_console_status(system, io);
+      return true;
+    }
+    if (hubos_root_task_shell_literal_equals(argv[1], "console")) {
+      if (argc == 3 && hubos_root_task_shell_literal_equals(argv[2], "status")) {
+        hubos_root_task_shell_print_vm_console_status(system, io);
+        return true;
+      }
+      if (argc == 3 && hubos_root_task_shell_literal_equals(argv[2], "attach")) {
+        if (hubos_system_attach_vm_console(system)) {
+          hubos_root_task_shell_puts(io, "vm console attached\n");
+        } else if (!hubos_system_vm_console_relay_available(system)) {
+          hubos_root_task_shell_puts(io, "vm console attach failed: guest serial relay unavailable\n");
+        } else {
+          hubos_root_task_shell_puts(io, "vm console attach failed\n");
+        }
+        return true;
+      }
+      if (argc == 3 && hubos_root_task_shell_literal_equals(argv[2], "detach")) {
+        hubos_root_task_shell_puts(io,
+                                   hubos_system_detach_vm_console(system) ?
+                                     "vm console detached\n" :
+                                     "vm console detach failed\n");
+        return true;
+      }
+      if (argc == 4 && hubos_root_task_shell_literal_equals(argv[2], "write")) {
+        hubos_root_task_shell_puts(io,
+                                   hubos_system_write_vm_console(system, argv[3], 0) ?
+                                     "vm console write queued\n" :
+                                     "vm console write failed\n");
+        return true;
+      }
     }
     if (argc == 2 && hubos_root_task_shell_literal_equals(argv[1], "start")) {
       if (system->vm_server.state == HUBOS_VM_RUNNING) {

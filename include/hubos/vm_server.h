@@ -20,6 +20,7 @@ typedef enum {
 
 typedef struct {
   const char *backend_name;
+  const char *console_backend_name;
   hubos_id_t id;
   hubos_id_t owner_session_id;
   hubos_vm_t vm;
@@ -31,6 +32,10 @@ typedef struct {
   unsigned max_restart_attempts;
   unsigned restart_attempts;
   unsigned last_failure_code;
+  bool console_relay_available;
+  bool console_attached;
+  unsigned long long console_tx_bytes;
+  unsigned long long console_rx_bytes;
 } hubos_vm_server_t;
 
 static inline void hubos_vm_server_init(hubos_vm_server_t *server,
@@ -44,6 +49,7 @@ static inline void hubos_vm_server_init(hubos_vm_server_t *server,
   }
 
   server->backend_name = backend_name;
+  server->console_backend_name = backend_name;
   server->id = id;
   server->owner_session_id = owner_session_id;
   server->vm = vm;
@@ -55,6 +61,10 @@ static inline void hubos_vm_server_init(hubos_vm_server_t *server,
   server->max_restart_attempts = 0;
   server->restart_attempts = 0;
   server->last_failure_code = 0;
+  server->console_relay_available = false;
+  server->console_attached = false;
+  server->console_tx_bytes = 0;
+  server->console_rx_bytes = 0;
 }
 
 static inline bool hubos_vm_server_is_configured(const hubos_vm_server_t *server) {
@@ -219,6 +229,58 @@ static inline bool hubos_vm_server_stop(hubos_vm_server_t *server) {
 
   server->state = HUBOS_VM_STOPPED;
   server->restart_attempts = 0;
+  server->console_attached = false;
+  return true;
+}
+
+static inline void hubos_vm_server_set_console_relay(hubos_vm_server_t *server,
+                                                     bool available,
+                                                     const char *backend_name) {
+  if (server == NULL) {
+    return;
+  }
+
+  server->console_relay_available = available;
+  server->console_backend_name = backend_name != NULL ? backend_name : server->backend_name;
+  if (!available) {
+    server->console_attached = false;
+  }
+}
+
+static inline bool hubos_vm_server_console_relay_available(const hubos_vm_server_t *server) {
+  return server != NULL && server->console_relay_available;
+}
+
+static inline bool hubos_vm_server_attach_console(hubos_vm_server_t *server) {
+  if (server == NULL || !server->console_relay_available || server->state != HUBOS_VM_RUNNING) {
+    return false;
+  }
+
+  server->console_attached = true;
+  return true;
+}
+
+static inline bool hubos_vm_server_detach_console(hubos_vm_server_t *server) {
+  if (server == NULL || !server->console_attached) {
+    return false;
+  }
+
+  server->console_attached = false;
+  return true;
+}
+
+static inline bool hubos_vm_server_console_write(hubos_vm_server_t *server,
+                                                 const char *text,
+                                                 size_t text_len) {
+  if (server == NULL || text == NULL || !server->console_attached ||
+      !server->console_relay_available || server->state != HUBOS_VM_RUNNING) {
+    return false;
+  }
+
+  if (text_len == 0u) {
+    text_len = strlen(text);
+  }
+  server->console_tx_bytes += (unsigned long long)text_len;
   return true;
 }
 

@@ -748,6 +748,44 @@ bool hubos_system_stop_vm(hubos_system_t *system) {
   return ok;
 }
 
+void hubos_system_set_vm_console_relay(hubos_system_t *system,
+                                       bool available,
+                                       const char *backend_name) {
+  if (system == NULL) {
+    return;
+  }
+
+  hubos_vm_server_set_console_relay(&system->vm_server, available, backend_name);
+}
+
+bool hubos_system_vm_console_relay_available(const hubos_system_t *system) {
+  return system != NULL && hubos_vm_server_console_relay_available(&system->vm_server);
+}
+
+bool hubos_system_attach_vm_console(hubos_system_t *system) {
+  if (system == NULL) {
+    return false;
+  }
+
+  return hubos_vm_server_attach_console(&system->vm_server);
+}
+
+bool hubos_system_detach_vm_console(hubos_system_t *system) {
+  if (system == NULL) {
+    return false;
+  }
+
+  return hubos_vm_server_detach_console(&system->vm_server);
+}
+
+bool hubos_system_write_vm_console(hubos_system_t *system, const char *text, size_t text_len) {
+  if (system == NULL) {
+    return false;
+  }
+
+  return hubos_vm_server_console_write(&system->vm_server, text, text_len);
+}
+
 bool hubos_system_describe_vm(const hubos_system_t *system,
                               hubos_service_descriptor_t *out_descriptor) {
   return hubos_vm_server_describe(&system->vm_server, out_descriptor);

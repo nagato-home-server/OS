@@ -261,6 +261,13 @@ bool hubos_system_start_vm(hubos_system_t *system);
 bool hubos_system_complete_vm_boot(hubos_system_t *system);
 bool hubos_system_fail_vm(hubos_system_t *system, unsigned failure_code);
 bool hubos_system_stop_vm(hubos_system_t *system);
+void hubos_system_set_vm_console_relay(hubos_system_t *system,
+                                       bool available,
+                                       const char *backend_name);
+bool hubos_system_vm_console_relay_available(const hubos_system_t *system);
+bool hubos_system_attach_vm_console(hubos_system_t *system);
+bool hubos_system_detach_vm_console(hubos_system_t *system);
+bool hubos_system_write_vm_console(hubos_system_t *system, const char *text, size_t text_len);
 bool hubos_system_describe_vm(const hubos_system_t *system,
                               hubos_service_descriptor_t *out_descriptor);
 

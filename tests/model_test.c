@@ -1173,7 +1173,9 @@ static void test_network_server(void) {
   assert(hubos_network_server_release_namespace(&server));
   assert(!server.namespace_bound);
   assert(server.namespace_handle.lifecycle.state == HUBOS_SHARED_RESOURCE_PENDING_FINALIZATION);
-  assert(!hubos_network_server_endpoint_describe(&endpoint, &descriptor));
+  assert(hubos_network_server_endpoint_describe(&endpoint, &descriptor));
+  assert(descriptor.resource_id == 77);
+  assert(descriptor.resource_state == HUBOS_RESOURCE_DISCOVERED);
   assert(hubos_network_server_finalize_namespace(&server));
   assert(server.namespace_handle.lifecycle.state == HUBOS_SHARED_RESOURCE_RETIRED);
 
@@ -2636,6 +2638,16 @@ static void test_app_container_vm_models(void) {
   assert(!hubos_vm_server_start(&vm_server));
   assert(hubos_vm_server_complete_boot(&vm_server));
   assert(vm_server.state == HUBOS_VM_RUNNING);
+  assert(!hubos_vm_server_console_relay_available(&vm_server));
+  assert(!hubos_vm_server_attach_console(&vm_server));
+  hubos_vm_server_set_console_relay(&vm_server, true, "uart16550");
+  assert(hubos_vm_server_console_relay_available(&vm_server));
+  assert(hubos_vm_server_attach_console(&vm_server));
+  assert(vm_server.console_attached);
+  assert(hubos_vm_server_console_write(&vm_server, "help", 0));
+  assert(vm_server.console_tx_bytes == 4);
+  assert(hubos_vm_server_detach_console(&vm_server));
+  assert(!vm_server.console_attached);
   assert(hubos_vm_server_describe(&vm_server, &display_descriptor));
   assert(display_descriptor.resource_id == 30);
   assert(strcmp(display_descriptor.name, "libvmm") == 0);
@@ -2688,6 +2700,16 @@ static void test_app_container_vm_models(void) {
   assert(display_descriptor.resource_id == 5);
   assert(display_descriptor.version == test_runtime_profiles[1].id);
   assert(display_descriptor.resource_state == HUBOS_RESOURCE_READY);
+  assert(!hubos_system_vm_console_relay_available(&control_system));
+  assert(!hubos_system_attach_vm_console(&control_system));
+  hubos_system_set_vm_console_relay(&control_system, true, "uart16550");
+  assert(hubos_system_vm_console_relay_available(&control_system));
+  assert(hubos_system_attach_vm_console(&control_system));
+  assert(control_system.vm_server.console_attached);
+  assert(hubos_system_write_vm_console(&control_system, "uname", 0));
+  assert(control_system.vm_server.console_tx_bytes == 5);
+  assert(hubos_system_detach_vm_console(&control_system));
+  assert(!control_system.vm_server.console_attached);
   assert(hubos_system_start_vm(&control_system) == false);
   assert(hubos_system_stop_vm(&control_system));
   assert(hubos_system_describe_vm(&control_system, &display_descriptor));
