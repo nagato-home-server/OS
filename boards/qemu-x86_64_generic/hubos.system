@@ -2,6 +2,7 @@
 <system>
   <protection_domain name="Root Task" priority="254">
     <program_image path="root-task.elf" />
+    <ioport id="0" addr="0x3f8" size="8" setvar_id="hubos_generated_com1_ioport" setvar_addr="hubos_generated_com1_addr" />
   </protection_domain>
 
   <protection_domain name="Resource Registry" priority="253">

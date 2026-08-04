@@ -382,6 +382,672 @@ seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo
   return seL4_False;
 }
 EOF
+  elif [ "$component_dir" = "root-task" ]; then
+    cat > "$out_dir/generated/$component_dir/main.c" <<EOF
+#include <microkit.h>
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include "component.h"
+#include "hubos/microkit_kernel_glue.h"
+#include "hubos/microkit_runtime.h"
+#include "hubos/runtime_config.h"
+#include "hubos/system.h"
+#include "hubos/microkit_transport.h"
+
+/*
+ * Generated Microkit component stub for ${component_name}.
+ * Badge: ${badge}
+ * Phase: ${phase}
+ * Bootstrap-only: ${bootstrap_only}
+ * Restartable: ${restartable}
+ * Dependencies: ${dependencies_label}
+ * Channels: ${channels_label}
+ * Endpoint published: ${endpoint_published}
+ * Notification published: ${notification_published}
+ * IRQ published: ${irq_published}
+ * Shared memory published: ${shared_memory_published}
+ *
+ * This file is intentionally shaped like a Microkit entrypoint so it can be
+ * copied into a real Microkit workspace and replaced with SDK-generated
+ * output later.
+ *
+ * The current transport shape is deliberately concrete:
+ * - microkit_msginfo label 0 is the protected-call envelope
+ * - hubos_microkit_transport_frame_t carries the payload words
+ * - protected() round-trips the frame through the transport helpers so the
+ *   callback body matches the upstream Microkit event loop that drives the
+ *   generated image under QEMU
+ */
+
+static hubos_system_t hubos_generated_system;
+static hubos_microkit_runtime_t hubos_generated_runtime;
+uint64_t hubos_generated_com1_ioport;
+uint64_t hubos_generated_com1_addr;
+static char hubos_generated_shell_line[128];
+static size_t hubos_generated_shell_line_len;
+
+static void hubos_generated_bootstrap(void) {
+  hubos_system_init(&hubos_generated_system, "root-key");
+  hubos_microkit_runtime_init(&hubos_generated_runtime, &hubos_generated_system);
+  (void)hubos_microkit_kernel_bootstrap(&hubos_generated_runtime);
+}
+
+static bool hubos_generated_serial_available(void) {
+  return hubos_generated_com1_addr != 0u;
+}
+
+static void hubos_generated_serial_init(void) {
+  if (!hubos_generated_serial_available()) {
+    return;
+  }
+
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 1u, 0x00u);
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 3u, 0x80u);
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 0u, 0x03u);
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 1u, 0x00u);
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 3u, 0x03u);
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 2u, 0xC7u);
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 4u, 0x0Bu);
+}
+
+static bool hubos_generated_serial_can_read(void) {
+  if (!hubos_generated_serial_available()) {
+    return false;
+  }
+
+  return (microkit_x86_ioport_read_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 5u) & 1u) != 0u;
+}
+
+static void hubos_generated_serial_putc(char ch) {
+  if (!hubos_generated_serial_available()) {
+    return;
+  }
+
+  while ((microkit_x86_ioport_read_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 5u) &
+          (1u << 5)) == 0u) {
+  }
+
+  microkit_x86_ioport_write_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 0u, (unsigned char)ch);
+}
+
+static void hubos_generated_serial_puts(const char *text) {
+  if (text == NULL || !hubos_generated_serial_available()) {
+    return;
+  }
+
+  while (*text != '\0') {
+    if (*text == '\n') {
+      hubos_generated_serial_putc('\r');
+    }
+    hubos_generated_serial_putc(*text++);
+  }
+}
+
+static char hubos_generated_serial_getc(void) {
+  return (char)microkit_x86_ioport_read_8(hubos_generated_com1_ioport, hubos_generated_com1_addr + 0u);
+}
+
+static void hubos_generated_serial_putu64(uint64_t value) {
+  char digits[21];
+  size_t index = 0;
+
+  if (value == 0u) {
+    hubos_generated_serial_putc('0');
+    return;
+  }
+
+  while (value > 0u && index < sizeof(digits)) {
+    digits[index++] = (char)('0' + (value % 10u));
+    value /= 10u;
+  }
+
+  while (index > 0u) {
+    hubos_generated_serial_putc(digits[--index]);
+  }
+}
+
+static void hubos_generated_shell_prompt(void) {
+  hubos_generated_serial_puts("hubos> ");
+}
+
+static bool hubos_generated_shell_starts_with(const char *text, const char *prefix) {
+  if (text == NULL || prefix == NULL) {
+    return false;
+  }
+
+  while (*prefix != '\0') {
+    if (*text != *prefix) {
+      return false;
+    }
+    ++text;
+    ++prefix;
+  }
+
+  return true;
+}
+
+static bool hubos_generated_shell_equals(const char *lhs, const char *rhs) {
+  if (lhs == NULL || rhs == NULL) {
+    return false;
+  }
+
+  while (*lhs != '\0' && *rhs != '\0' && *lhs == *rhs) {
+    ++lhs;
+    ++rhs;
+  }
+
+  return *lhs == '\0' && *rhs == '\0';
+}
+
+static const char *hubos_generated_shell_skip_spaces(const char *text) {
+  while (text != NULL && (*text == ' ' || *text == '\t')) {
+    ++text;
+  }
+
+  return text;
+}
+
+static void hubos_generated_shell_print_vm_status(void) {
+  hubos_vm_server_t *vm = &hubos_generated_system.vm_server;
+  const char *state = "unknown";
+
+  switch (vm->state) {
+  case HUBOS_VM_STOPPED:
+    state = "stopped";
+    break;
+  case HUBOS_VM_BOOTING:
+    state = "booting";
+    break;
+  case HUBOS_VM_RUNNING:
+    state = "running";
+    break;
+  case HUBOS_VM_FAILED:
+    state = "failed";
+    break;
+  }
+
+  hubos_generated_serial_puts("vm.state=");
+  hubos_generated_serial_puts(state);
+  hubos_generated_serial_puts("\nvm.profile=");
+  hubos_generated_serial_puts(vm->runtime_profile != NULL && vm->runtime_profile->id != NULL
+                                ? vm->runtime_profile->id
+                                : "(none)");
+  hubos_generated_serial_puts("\nvm.vcpus=");
+  hubos_generated_serial_putu64(vm->vm.vcpu_count);
+  hubos_generated_serial_puts("\nvm.guest_memory_id=");
+  hubos_generated_serial_putu64(vm->vm.guest_memory_id);
+  hubos_generated_serial_puts("\n");
+}
+
+static void hubos_generated_shell_print_services(void) {
+  hubos_service_descriptor_t descriptor = {0};
+
+  if (hubos_system_describe_vm(&hubos_generated_system, &descriptor)) {
+    hubos_generated_serial_puts("service.vm=");
+    hubos_generated_serial_puts(descriptor.name != NULL ? descriptor.name : "vm");
+    hubos_generated_serial_puts(" state=");
+    hubos_generated_serial_putu64(descriptor.resource_state);
+    hubos_generated_serial_puts("\n");
+  }
+
+  if (hubos_system_describe_network_server(&hubos_generated_system, &descriptor)) {
+    hubos_generated_serial_puts("service.network=");
+    hubos_generated_serial_puts(descriptor.name != NULL ? descriptor.name : "network");
+    hubos_generated_serial_puts(" state=");
+    hubos_generated_serial_putu64(descriptor.resource_state);
+    hubos_generated_serial_puts("\n");
+  }
+
+  if (hubos_system_describe_device(&hubos_generated_system, &descriptor)) {
+    hubos_generated_serial_puts("service.device=");
+    hubos_generated_serial_puts(descriptor.name != NULL ? descriptor.name : "device");
+    hubos_generated_serial_puts(" state=");
+    hubos_generated_serial_putu64(descriptor.resource_state);
+    hubos_generated_serial_puts("\n");
+  }
+}
+
+static void hubos_generated_shell_list_profiles(void) {
+  size_t profile_count = 0;
+  const hubos_app_vm_runtime_profile_t *profiles = hubos_runtime_config_profiles(&profile_count);
+
+  hubos_generated_serial_puts("profiles:");
+  if (profiles == NULL || profile_count == 0u) {
+    hubos_generated_serial_puts(" none\n");
+    return;
+  }
+
+  for (size_t index = 0; index < profile_count; ++index) {
+    hubos_generated_serial_puts(index == 0u ? " " : ", ");
+    hubos_generated_serial_puts(profiles[index].id != NULL ? profiles[index].id : "(unnamed)");
+  }
+  hubos_generated_serial_puts("\n");
+}
+
+static void hubos_generated_shell_select_profile(const char *profile_id) {
+  size_t profile_count = 0;
+  const hubos_app_vm_runtime_profile_t *profiles = hubos_runtime_config_profiles(&profile_count);
+  const hubos_app_vm_runtime_profile_t *profile =
+    hubos_app_vm_runtime_catalog_find(profiles, profile_count, profile_id);
+
+  if (profile == NULL) {
+    hubos_generated_serial_puts("unknown profile\n");
+    return;
+  }
+
+  if (!hubos_system_select_vm_runtime_profile(&hubos_generated_system, profile)) {
+    hubos_generated_serial_puts("failed to select profile\n");
+    return;
+  }
+
+  hubos_generated_serial_puts("selected profile ");
+  hubos_generated_serial_puts(profile->id);
+  hubos_generated_serial_puts("\n");
+}
+
+static void hubos_generated_shell_execute(const char *line) {
+  const char *arg = NULL;
+
+  if (line == NULL || line[0] == '\0') {
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "help")) {
+    hubos_generated_serial_puts(
+      "commands: help status services vm status vm start vm stop vm restart vm profile vm profiles vm profile <id>\n");
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "status") ||
+      hubos_generated_shell_equals(line, "vm status")) {
+    hubos_generated_shell_print_vm_status();
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "services")) {
+    hubos_generated_shell_print_services();
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "vm start")) {
+    if (hubos_generated_system.vm_server.state == HUBOS_VM_RUNNING) {
+      hubos_generated_serial_puts("vm already running\n");
+      return;
+    }
+    if (hubos_system_start_vm(&hubos_generated_system) &&
+        hubos_system_complete_vm_boot(&hubos_generated_system)) {
+      hubos_generated_serial_puts("vm started\n");
+    } else {
+      hubos_generated_serial_puts("vm start failed\n");
+    }
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "vm stop")) {
+    if (hubos_system_stop_vm(&hubos_generated_system)) {
+      hubos_generated_serial_puts("vm stopped\n");
+    } else {
+      hubos_generated_serial_puts("vm stop failed\n");
+    }
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "vm restart")) {
+    (void)hubos_system_stop_vm(&hubos_generated_system);
+    if (hubos_system_start_vm(&hubos_generated_system) &&
+        hubos_system_complete_vm_boot(&hubos_generated_system)) {
+      hubos_generated_serial_puts("vm restarted\n");
+    } else {
+      hubos_generated_serial_puts("vm restart failed\n");
+    }
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "vm profile")) {
+    hubos_generated_serial_puts("current profile ");
+    hubos_generated_serial_puts(hubos_generated_system.vm_server.runtime_profile != NULL &&
+                                  hubos_generated_system.vm_server.runtime_profile->id != NULL
+                                  ? hubos_generated_system.vm_server.runtime_profile->id
+                                  : "(none)");
+    hubos_generated_serial_puts("\n");
+    return;
+  }
+
+  if (hubos_generated_shell_equals(line, "vm profiles")) {
+    hubos_generated_shell_list_profiles();
+    return;
+  }
+
+  if (hubos_generated_shell_starts_with(line, "vm profile ")) {
+    arg = hubos_generated_shell_skip_spaces(line + 11);
+    if (arg == NULL || arg[0] == '\0') {
+      hubos_generated_serial_puts("missing profile id\n");
+      return;
+    }
+    hubos_generated_shell_select_profile(arg);
+    return;
+  }
+
+  hubos_generated_serial_puts("unknown command\n");
+}
+
+static void hubos_generated_shell_run(void) {
+  if (!hubos_generated_serial_available()) {
+    microkit_dbg_puts("HubOS Shell: serial console unavailable\n");
+    return;
+  }
+
+  hubos_generated_serial_init();
+  hubos_generated_serial_puts("HubOS Shell: ready\n");
+  hubos_generated_shell_prompt();
+
+  for (;;) {
+    char ch = '\0';
+
+    if (!hubos_generated_serial_can_read()) {
+      seL4_Yield();
+      continue;
+    }
+
+    ch = hubos_generated_serial_getc();
+    if (ch == '\r' || ch == '\n') {
+      hubos_generated_serial_puts("\n");
+      hubos_generated_shell_line[hubos_generated_shell_line_len] = '\0';
+      hubos_generated_shell_execute(hubos_generated_shell_line);
+      hubos_generated_shell_line_len = 0;
+      hubos_generated_shell_prompt();
+      continue;
+    }
+
+    if (ch == '\b' || ch == 0x7f) {
+      if (hubos_generated_shell_line_len > 0u) {
+        hubos_generated_shell_line_len--;
+        hubos_generated_serial_puts("\b \b");
+      }
+      continue;
+    }
+
+    if (ch < ' ' || ch > '~') {
+      continue;
+    }
+
+    if (hubos_generated_shell_line_len + 1u >= sizeof(hubos_generated_shell_line)) {
+      hubos_generated_serial_puts("\nline too long\n");
+      hubos_generated_shell_line_len = 0;
+      hubos_generated_shell_prompt();
+      continue;
+    }
+
+    hubos_generated_shell_line[hubos_generated_shell_line_len++] = ch;
+    hubos_generated_serial_putc(ch);
+  }
+}
+
+static bool hubos_generated_supports_endpoint(void) {
+  return HUBOS_MICROKIT_COMPONENT_ENDPOINT_PUBLISHED;
+}
+
+static bool hubos_generated_supports_notification(void) {
+  return HUBOS_MICROKIT_COMPONENT_NOTIFICATION_PUBLISHED;
+}
+
+static bool hubos_generated_supports_faults(void) {
+  return HUBOS_MICROKIT_COMPONENT_IRQ_PUBLISHED || HUBOS_MICROKIT_COMPONENT_SHARED_MEMORY_PUBLISHED;
+}
+
+static bool hubos_generated_matches_badge(microkit_channel ch) {
+  return ch == (microkit_channel)HUBOS_MICROKIT_COMPONENT_BADGE;
+}
+
+static bool hubos_generated_matches_service(const hubos_microkit_ipc_request_t *request) {
+  return request != NULL && request->service == HUBOS_MICROKIT_COMPONENT_KIND;
+}
+
+static const char *hubos_generated_boot_step_name(hubos_boot_step_t step) {
+  switch (step) {
+  case HUBOS_BOOT_FIRMWARE:
+    return "firmware";
+  case HUBOS_BOOT_SEL4:
+    return "sel4";
+  case HUBOS_BOOT_ROOT_TASK:
+    return "root-task";
+  case HUBOS_BOOT_RESOURCE_REGISTRY:
+    return "resource-registry";
+  case HUBOS_BOOT_SESSION_MANAGER:
+    return "session-manager";
+  case HUBOS_BOOT_CAPABILITY_MANAGER:
+    return "capability-manager";
+  case HUBOS_BOOT_MEMORY_MANAGER:
+    return "memory-manager";
+  case HUBOS_BOOT_DMA_MANAGER:
+    return "dma-manager";
+  case HUBOS_BOOT_HUB:
+    return "hub";
+  case HUBOS_BOOT_DRIVER_REGISTRY:
+    return "driver-registry";
+  case HUBOS_BOOT_BUS_MANAGERS:
+    return "bus-managers";
+  case HUBOS_BOOT_DEVICE_DISCOVERY:
+    return "device-discovery";
+  case HUBOS_BOOT_DRIVER_BINDING:
+    return "driver-binding";
+  case HUBOS_BOOT_SYSTEM_SERVERS:
+    return "system-servers";
+  case HUBOS_BOOT_APP_MANAGERS:
+    return "app-managers";
+  case HUBOS_BOOT_APPS:
+    return "apps";
+  case HUBOS_BOOT_STEP_COUNT:
+    return "step-count";
+  }
+
+  return "unknown";
+}
+
+typedef hubos_microkit_transport_frame_t hubos_generated_transport_frame_t;
+
+static void hubos_generated_trace_message(const char *kind,
+                                          microkit_channel ch,
+                                          microkit_msginfo msginfo,
+                                          const hubos_generated_transport_frame_t *frame) {
+  seL4_Uint16 count = frame != NULL ? frame->count : (seL4_Uint16)microkit_msginfo_get_count(msginfo);
+
+  microkit_dbg_puts(HUBOS_MICROKIT_COMPONENT_NAME);
+  microkit_dbg_puts(": ");
+  microkit_dbg_puts(kind);
+  microkit_dbg_puts(" ch=");
+  microkit_dbg_put32(ch);
+  microkit_dbg_puts(" label=");
+  microkit_dbg_put32((seL4_Word)microkit_msginfo_get_label(msginfo));
+  microkit_dbg_puts(" count=");
+  microkit_dbg_put32((seL4_Word)count);
+  for (seL4_Uint16 index = 0; index < count && index < HUBOS_MICROKIT_COMPONENT_TRANSPORT_MAX_WORDS;
+       ++index) {
+    microkit_dbg_puts(" mr");
+    microkit_dbg_put32((seL4_Word)index);
+    microkit_dbg_puts("=");
+    microkit_dbg_put32(frame != NULL ? frame->words[index] : microkit_mr_get((seL4_Uint8)index));
+  }
+  microkit_dbg_puts("\n");
+}
+
+static void hubos_generated_trace_root_task_operation(const char *prefix,
+                                                      const hubos_microkit_ipc_request_t *request) {
+  if (request == NULL || request->service != HUBOS_MICROKIT_COMPONENT_ROOT_TASK) {
+    return;
+  }
+
+  microkit_dbg_puts(HUBOS_MICROKIT_COMPONENT_NAME);
+  microkit_dbg_puts(": ");
+  microkit_dbg_puts(prefix);
+  microkit_dbg_puts(" op=");
+  microkit_dbg_put32((seL4_Word)request->operation);
+  if (request->operation == HUBOS_ROOT_TASK_OP_COMPLETE_BOOT_STEP ||
+      request->operation == HUBOS_ROOT_TASK_OP_QUERY_BOOT_STEP) {
+    microkit_dbg_puts(" step=");
+    microkit_dbg_puts(hubos_generated_boot_step_name(request->payload.boot_step.step));
+  }
+  microkit_dbg_puts("\n");
+}
+
+static void hubos_generated_trace_root_task_response(const hubos_microkit_ipc_request_t *request,
+                                                     const hubos_microkit_ipc_response_t *response) {
+  if (request == NULL || response == NULL || request->service != HUBOS_MICROKIT_COMPONENT_ROOT_TASK) {
+    return;
+  }
+
+  microkit_dbg_puts(HUBOS_MICROKIT_COMPONENT_NAME);
+  microkit_dbg_puts(": done op=");
+  microkit_dbg_put32((seL4_Word)request->operation);
+  if (request->operation == HUBOS_ROOT_TASK_OP_ADVANCE_CONTROL_PLANE) {
+    microkit_dbg_puts(" step=");
+    microkit_dbg_puts(hubos_generated_boot_step_name(response->boot_step));
+  }
+  microkit_dbg_puts(" status=");
+  microkit_dbg_put32((seL4_Word)response->status);
+  microkit_dbg_puts("\n");
+}
+
+static bool hubos_generated_transport_read(microkit_msginfo msginfo,
+                                           hubos_generated_transport_frame_t *frame) {
+  if (frame == NULL) {
+    return false;
+  }
+
+  return hubos_microkit_transport_frame_from_msginfo(frame, msginfo);
+}
+
+static void hubos_generated_transport_write(const hubos_generated_transport_frame_t *frame) {
+  hubos_microkit_transport_frame_to_mrs(frame);
+}
+
+static microkit_msginfo hubos_generated_reject_call(microkit_channel ch,
+                                                    microkit_msginfo msginfo) {
+  hubos_generated_trace_message("reject", ch, msginfo, NULL);
+  return microkit_msginfo_new(0, 0);
+}
+
+static bool hubos_generated_dispatch_notification(microkit_channel ch) {
+  microkit_msginfo msginfo = microkit_msginfo_new(0, 0);
+  hubos_generated_transport_frame_t frame;
+
+  if (!hubos_generated_supports_notification() || !hubos_generated_matches_badge(ch)) {
+    return false;
+  }
+
+  hubos_microkit_transport_frame_init(&frame);
+  hubos_generated_trace_message("notification", ch, msginfo, &frame);
+  return true;
+}
+
+static void hubos_generated_handle_notification(microkit_channel ch) {
+  (void)hubos_generated_dispatch_notification(ch);
+}
+
+static microkit_msginfo hubos_generated_handle_bootstrap_call(microkit_channel ch,
+                                                              microkit_msginfo msginfo) {
+  (void)ch;
+  return hubos_generated_reject_call(ch, msginfo);
+}
+
+static microkit_msginfo hubos_generated_handle_service_call(microkit_channel ch,
+                                                            microkit_msginfo msginfo) {
+  hubos_generated_transport_frame_t request_frame;
+  hubos_generated_transport_frame_t response_frame;
+  hubos_microkit_ipc_request_t request;
+  hubos_microkit_ipc_response_t response;
+  microkit_msginfo response_msginfo;
+
+  hubos_microkit_transport_frame_init(&request_frame);
+  if (!hubos_generated_transport_read(msginfo, &request_frame)) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+
+  if (!hubos_microkit_transport_request_decode(&request_frame, &request)) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+
+  hubos_generated_trace_message("request", ch, msginfo, &request_frame);
+
+  if (!hubos_generated_matches_service(&request)) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+
+  hubos_generated_trace_root_task_operation("recv", &request);
+  if (!hubos_microkit_transport_synthesize_response(&request, &response)) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+  hubos_generated_trace_root_task_response(&request, &response);
+
+  hubos_microkit_transport_frame_init(&response_frame);
+  if (!hubos_microkit_transport_response_encode(&response, &response_frame)) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+
+  response_msginfo =
+    hubos_microkit_transport_frame_to_msginfo(&response_frame,
+                                              HUBOS_MICROKIT_COMPONENT_TRANSPORT_CALL_LABEL);
+  hubos_generated_trace_message("response", ch, response_msginfo, &response_frame);
+  hubos_generated_transport_write(&response_frame);
+  return response_msginfo;
+}
+
+static microkit_msginfo hubos_generated_handle_protected_call(
+  microkit_channel ch,
+  microkit_msginfo msginfo) {
+  if (!hubos_generated_supports_endpoint()) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+
+  if (!hubos_generated_matches_badge(ch)) {
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+
+  switch (microkit_msginfo_get_label(msginfo)) {
+  case 0:
+    if (HUBOS_MICROKIT_COMPONENT_BOOTSTRAP_ONLY) {
+      return hubos_generated_handle_bootstrap_call(ch, msginfo);
+    }
+    return hubos_generated_handle_service_call(ch, msginfo);
+  default:
+    return hubos_generated_reject_call(ch, msginfo);
+  }
+}
+
+void init(void) {
+  hubos_generated_bootstrap();
+  microkit_dbg_puts(HUBOS_MICROKIT_COMPONENT_NAME);
+  microkit_dbg_puts(": entering init\n");
+  microkit_dbg_puts(HUBOS_MICROKIT_COMPONENT_NAME);
+  microkit_dbg_puts(": init\n");
+  microkit_dbg_puts(HUBOS_MICROKIT_COMPONENT_NAME);
+  microkit_dbg_puts(": init complete\n");
+  hubos_generated_shell_run();
+}
+
+void notified(microkit_channel ch) {
+  hubos_generated_handle_notification(ch);
+}
+
+microkit_msginfo protected(microkit_channel ch, microkit_msginfo msginfo) {
+  return hubos_generated_handle_protected_call(ch, msginfo);
+}
+
+seL4_Bool fault(microkit_child child, microkit_msginfo msginfo, microkit_msginfo *reply_msginfo) {
+  if (reply_msginfo != NULL) {
+    *reply_msginfo = microkit_msginfo_new(0, 0);
+  }
+
+  if (hubos_generated_supports_faults()) {
+    hubos_generated_trace_message("fault", (microkit_channel)child, msginfo, NULL);
+  } else {
+    hubos_generated_trace_message("fault-unexpected", (microkit_channel)child, msginfo, NULL);
+  }
+
+  return seL4_False;
+}
+EOF
   else
     cat > "$out_dir/generated/$component_dir/main.c" <<EOF
 #include <microkit.h>
